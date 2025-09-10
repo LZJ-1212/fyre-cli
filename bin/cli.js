@@ -1,0 +1,1 @@
+console.log('Fyre CLI is alive!');
