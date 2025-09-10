@@ -6,6 +6,8 @@ const morgan = require('morgan'); // 请求日志
 const compression = require('compression'); // Gzip压缩
 const rateLimit = require('express-rate-limit'); // 速率限制
 const createError = require('http-errors'); // HTTP错误处理
+const fs = require('fs');
+const path = require('path');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -65,7 +67,7 @@ app.use(express.static('public', {
 
 // 基本路由
 app.get('/', (req, res) => {
-  res.json({ 
+  res.json({
     message: '欢迎使用Node.js服务器!',
     timestamp: new Date().toISOString(),
     version: process.env.npm_package_version || '1.0.0',
@@ -75,15 +77,34 @@ app.get('/', (req, res) => {
 
 // 健康检查端点
 app.get('/health', (req, res) => {
-  res.status(200).json({ 
-    status: 'OK',
-    uptime: process.uptime(),
-    timestamp: new Date().toISOString()
-  });
+  res.status(200).send('OK');
 });
 
-// API路由示例
-app.use('/api', require('./routes/api'));
+// API路由 - 添加存在检查
+const apiRoutePath = path.join(__dirname, 'routes', 'api.js');
+if (fs.existsSync(apiRoutePath)) {
+  app.use('/api', require('./routes/api'));
+  console.log('API路由已加载');
+} else {
+  console.warn('⚠️  API路由文件不存在，跳过加载API路由');
+
+  // 提供一个基本的路由作为替代
+  app.get('/api', (req, res) => {
+    res.status(501).json({
+      error: 'API路由未实现',
+      message: 'API路由文件不存在，请创建 src/routes/api.js',
+      timestamp: new Date().toISOString()
+    });
+  });
+
+  app.get('/api/health', (req, res) => {
+    res.status(200).json({
+      status: 'OK',
+      message: '基础API健康检查',
+      timestamp: new Date().toISOString()
+    });
+  });
+}
 
 // 404处理
 app.use((req, res, next) => {
@@ -94,10 +115,10 @@ app.use((req, res, next) => {
 app.use((err, req, res, next) => {
   // 设置局部变量，仅提供开发环境的错误信息
   const error = isProduction ? {} : err;
-  
+
   // 记录错误
   console.error(err);
-  
+
   // 发送错误响应
   res.status(err.status || 500);
   res.json({

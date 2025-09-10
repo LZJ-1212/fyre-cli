@@ -67,21 +67,21 @@ async function checkTemplateIntegrity(templateDir) {
     '.gitignore',
     'README.md'
   ];
-  
+
   const missingFiles = [];
-  
+
   for (const file of requiredFiles) {
     const filePath = path.join(templateDir, file);
     if (!fs.existsSync(filePath)) {
       missingFiles.push(file);
     }
   }
-  
+
   if (missingFiles.length > 0) {
     console.warn('⚠️  模板不完整，缺少以下文件:');
     missingFiles.forEach(file => console.warn(`    - ${file}`));
     console.warn('  这可能会导致创建的项目无法正常运行。');
-    
+
     // 询问用户是否继续
     const { continueAnyway } = await prompt([
       {
@@ -91,7 +91,7 @@ async function checkTemplateIntegrity(templateDir) {
         default: false
       }
     ]);
-    
+
     if (!continueAnyway) {
       console.log('操作已取消');
       process.exit(1);
@@ -206,6 +206,10 @@ program
         console.error(`错误：模板目录 '${templateDir}' 不存在.`);
         process.exit(1);
       }
+
+      // 检查模板完整性
+      console.log('检查模板完整性...');
+      await checkTemplateIntegrity(templateDir);
 
       // 创建项目目录
       await fs.ensureDir(targetDir);
