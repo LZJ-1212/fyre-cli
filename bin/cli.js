@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 
 const { program } = require('commander');
-const inquirer = require('inquirer').default;
+const inquirer = require('inquirer');
 const fs = require('fs-extra');
 const path = require('path');
-const { spawn } = require('child_process'); // 添加子进程支持
+const { spawn } = require('child_process');
 
 // 定义程序的版本信息
 program.version(require('../package.json').version, '-v, --version', '输出当前版本');
@@ -13,17 +13,122 @@ program.version(require('../package.json').version, '-v, --version', '输出当�
 const TEMPLATES = {
   node: {
     name: 'Node.js (基础)',
-    description: '基础Node.js项目模板'
+    description: '基础Node.js项目模板',
+    dir: 'node-basic' // 指定模板目录名称
   },
   react: {
     name: 'React',
-    description: 'React项目模板'
+    description: 'React项目模板',
+    dir: 'react'
   },
   vue: {
     name: 'Vue',
-    description: 'Vue项目模板'
+    description: 'Vue项目模板',
+    dir: 'vue'
   }
 };
+
+// 创建 inquirer prompt 函数
+const prompt = inquirer.createPromptModule();
+
+// 递归处理文件，替换占位符
+async function processFiles(dir, replacements) {
+  const files = await fs.readdir(dir);
+
+  for (const file of files) {
+    const filePath = path.join(dir, file);
+    const stat = await fs.stat(filePath);
+
+    if (stat.isDirectory()) {
+      await processFiles(filePath, replacements);
+    } else {
+      // 读取文件内容
+      let content = await fs.readFile(filePath, 'utf8');
+
+      // 替换所有占位符
+      for (const [key, value] of Object.entries(replacements)) {
+        const placeholder = `{% ${key} %}`;
+        content = content.replace(new RegExp(placeholder, 'g'), value);
+      }
+
+      // 写回文件
+      await fs.writeFile(filePath, content, 'utf8');
+    }
+  }
+}
+
+// 检查模板完整性
+async function checkTemplateIntegrity(templateDir) {
+  const requiredFiles = [
+    'package.json',
+    'src/index.js',
+    'src/routes/api.js',
+    '.env.example',
+    '.gitignore',
+    'README.md'
+  ];
+  
+  const missingFiles = [];
+  
+  for (const file of requiredFiles) {
+    const filePath = path.join(templateDir, file);
+    if (!fs.existsSync(filePath)) {
+      missingFiles.push(file);
+    }
+  }
+  
+  if (missingFiles.length > 0) {
+    console.warn('⚠️  模板不完整，缺少以下文件:');
+    missingFiles.forEach(file => console.warn(`    - ${file}`));
+    console.warn('  这可能会导致创建的项目无法正常运行。');
+    
+    // 询问用户是否继续
+    const { continueAnyway } = await prompt([
+      {
+        name: 'continueAnyway',
+        type: 'confirm',
+        message: '是否继续创建项目?',
+        default: false
+      }
+    ]);
+    
+    if (!continueAnyway) {
+      console.log('操作已取消');
+      process.exit(1);
+    }
+  }
+}
+
+// 获取 git 配置信息
+async function getGitConfig() {
+  return new Promise((resolve) => {
+    const result = { name: '', email: '' };
+    let completed = 0;
+
+    const checkCompletion = () => {
+      completed++;
+      if (completed === 2) {
+        resolve(result);
+      }
+    };
+
+    // 获取 git 用户名
+    const nameProcess = spawn('git', ['config', 'user.name']);
+    nameProcess.stdout.on('data', (data) => {
+      result.name = data.toString().trim();
+    });
+    nameProcess.on('close', checkCompletion);
+    nameProcess.on('error', checkCompletion);
+
+    // 获取 git 邮箱
+    const emailProcess = spawn('git', ['config', 'user.email']);
+    emailProcess.stdout.on('data', (data) => {
+      result.email = data.toString().trim();
+    });
+    emailProcess.on('close', checkCompletion);
+    emailProcess.on('error', checkCompletion);
+  });
+}
 
 // 定义 create 命令
 program
@@ -33,6 +138,7 @@ program
   .option('-f, --force', '如果目标目录已存在，则强制覆盖', false)
   .option('-g, --git', '初始化git仓库', false)
   .option('-i, --install', '自动安装依赖', false)
+  .option('-a, --author <author>', '设置项目作者', '')
   .action(async (projectName, options) => {
     try {
       // 验证项目名称
@@ -45,7 +151,7 @@ program
       const targetDir = path.join(process.cwd(), projectName);
       if (fs.existsSync(targetDir)) {
         if (!options.force) {
-          const { action } = await inquirer.prompt([
+          const { action } = await prompt([
             {
               name: 'action',
               type: 'list',
@@ -56,7 +162,7 @@ program
               ]
             }
           ]);
-          
+
           if (!action) {
             console.log('操作已取消');
             return;
@@ -73,7 +179,7 @@ program
       // 确定要使用的模板
       let template = options.template;
       if (!template) {
-        const { templateAnswer } = await inquirer.prompt([
+        const { templateAnswer } = await prompt([
           {
             name: 'templateAnswer',
             type: 'list',
@@ -94,7 +200,7 @@ program
       }
 
       // 根据模板名称，构造模板路径
-      const templateDir = path.join(__dirname, '../templates', template);
+      const templateDir = path.join(__dirname, '../src/templates', TEMPLATES[template].dir);
 
       if (!fs.existsSync(templateDir)) {
         console.error(`错误：模板目录 '${templateDir}' 不存在.`);
@@ -107,23 +213,57 @@ program
       // 将模板文件复制到目标目录
       console.log(`\n正在创建项目 ${projectName}...`);
       await fs.copy(templateDir, targetDir);
-      
-      // 更新package.json中的项目名称
-      const packageJsonPath = path.join(targetDir, 'package.json');
-      if (fs.existsSync(packageJsonPath)) {
-        const packageJson = await fs.readJson(packageJsonPath);
-        packageJson.name = projectName;
-        await fs.writeJson(packageJsonPath, packageJson, { spaces: 2 });
+
+      // 获取作者信息（如果未通过选项提供）
+      let author = options.author;
+      if (!author) {
+        try {
+          // 尝试从git配置获取作者信息
+          const gitConfig = await getGitConfig();
+          author = gitConfig.email ? `${gitConfig.name} <${gitConfig.email}>` : gitConfig.name || 'Unknown';
+        } catch (error) {
+          author = 'Unknown';
+        }
       }
 
+      // 定义占位符替换映射
+      const replacements = {
+        projectName: projectName,
+        author: author,
+        year: new Date().getFullYear()
+      };
+
+      // 处理所有文件，替换占位符
+      console.log('正在处理模板文件...');
+      await processFiles(targetDir, replacements);
+
       console.log(`\n✅ 项目 ${projectName} 创建成功！使用模板: ${TEMPLATES[template].name}`);
+
+      if (!options.git) { // 如果用户没有通过命令行选项指定
+        const { shouldInitGit } = await prompt([
+          {
+            name: 'shouldInitGit',
+            type: 'confirm',
+            message: '是否要初始化Git仓库?',
+            default: true // 默认选择是
+          }
+        ]);
+        options.git = shouldInitGit; // 将询问结果赋值给 options.git
+      }
 
       // 初始化git仓库
       if (options.git) {
         console.log('📦 初始化Git仓库...');
         try {
-          spawn('git', ['init'], { cwd: targetDir, stdio: 'inherit' });
-          console.log('✅ Git仓库初始化完成');
+          const gitInit = spawn('git', ['init'], { cwd: targetDir, stdio: 'inherit' });
+
+          gitInit.on('close', (code) => {
+            if (code === 0) {
+              console.log('✅ Git仓库初始化完成');
+            } else {
+              console.warn('⚠️  Git初始化失败，请手动初始化');
+            }
+          });
         } catch (error) {
           console.warn('⚠️  Git初始化失败，请手动初始化');
         }
@@ -133,25 +273,29 @@ program
       if (options.install) {
         console.log('📦 安装项目依赖...');
         try {
-          // 检测包管理器
-          const hasYarn = await fs.pathExists(path.join(process.cwd(), 'yarn.lock'));
-          const command = hasYarn ? 'yarn' : 'npm';
-          
-          spawn(command, ['install'], { cwd: targetDir, stdio: 'inherit' });
-          console.log('✅ 依赖安装完成');
+          // 使用npm安装依赖
+          const installProcess = spawn('npm', ['install'], { cwd: targetDir, stdio: 'inherit' });
+
+          installProcess.on('close', (code) => {
+            if (code === 0) {
+              console.log('✅ 依赖安装完成');
+            } else {
+              console.warn('⚠️  自动安装依赖失败，请手动运行 npm install');
+            }
+          });
         } catch (error) {
-          console.warn('⚠️  自动安装依赖失败，请手动运行 npm install 或 yarn install');
+          console.warn('⚠️  自动安装依赖失败，请手动运行 npm install');
         }
       }
 
       // 显示下一步指引
       console.log('\n🎉 项目创建完成！下一步：');
       console.log(`  cd ${projectName}`);
-      
+
       if (!options.install) {
-        console.log(`  npm install 或 yarn install`);
+        console.log(`  npm install`);
       }
-      
+
       console.log(`  开始编码！\n`);
 
     } catch (error) {
