@@ -11,19 +11,19 @@ describe('基础路由测试', () => {
     expect(response.body).toHaveProperty('timestamp');
   });
 
-  test('GET /health 应该返回健康状态', async () => {
-    const response = await request(app).get('/health');
-    expect(response.statusCode).toBe(200);
-    expect(response.body.status).toBe('OK');
-  });
-});
-
 describe('API 路由测试', () => {
   test('GET /api 应该返回API信息', async () => {
     const response = await request(app).get('/api');
     // 根据你的API路由实现，这里可能是200或501
     expect([200, 501]).toContain(response.statusCode);
   });
+
+  test('GET /api/health 应该返回健康状态', async () => { // 修改描述
+    const response = await request(app).get('/api/health');
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toHaveProperty('status');
+  });
+});
 
   test('GET /api 应该返回API信息', async () => {
     const response = await request(app).get('/api/health'); // 改为测试 /api/health

@@ -6,6 +6,18 @@ const router = express.Router();
  * @description 检查API健康状况
  * @access Public
  */
+router.get('/health', (req, res) => {
+  res.status(200).json({
+    status: 'OK',
+    timestamp: new Date().toISOString(),
+  });
+});
+
+/**
+ * @route GET /api
+ * @description 返回API信息
+ * @access Public
+ */
 router.get('/', (req, res) => {
   res.status(200).json({
     message: 'API 服务运行正常',
