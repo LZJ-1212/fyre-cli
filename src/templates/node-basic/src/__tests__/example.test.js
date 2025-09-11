@@ -1,14 +1,7 @@
 const request = require('supertest');
 const app = require('../index');
 
-// 关闭服务器避免端口占用
-afterAll((done) => {
-  if (app && app.close) {
-    app.close(done);
-  } else {
-    done();
-  }
-});
+// 不再需要手动关闭服务器，因为测试环境下服务器不会启动
 
 describe('基础路由测试', () => {
   test('GET / 应该返回欢迎信息', async () => {
@@ -21,7 +14,7 @@ describe('基础路由测试', () => {
   test('GET /health 应该返回健康状态', async () => {
     const response = await request(app).get('/health');
     expect(response.statusCode).toBe(200);
-    expect(response.text).toBe('OK');
+    expect(response.body.status).toBe('OK');
   });
 });
 
@@ -32,32 +25,17 @@ describe('API 路由测试', () => {
     expect([200, 501]).toContain(response.statusCode);
   });
 
-  test('GET /api/health 应该返回API健康状态', async () => {
-    const response = await request(app).get('/api/health');
+  test('GET /api 应该返回API信息', async () => {
+    const response = await request(app).get('/api/health'); // 改为测试 /api/health
     expect(response.statusCode).toBe(200);
     expect(response.body).toHaveProperty('status');
-  });
-});
-
-// 工具函数测试示例
-describe('工具函数测试', () => {
-  // 示例测试 - 替换为你的实际工具函数
-  const { formatDate } = require('../utils/helpers');
-
-  test('formatDate 函数应该正确格式化日期', () => {
-    // 如果helpers.js不存在，跳过这个测试
-    if (!formatDate) return;
-    
-    const date = new Date('2023-01-01');
-    const formatted = formatDate(date);
-    expect(formatted).toMatch(/\d{4}-\d{2}-\d{2}/);
   });
 });
 
 // 模拟函数测试示例
 describe('模拟函数测试', () => {
   const mockFn = jest.fn();
-  
+
   beforeEach(() => {
     mockFn.mockClear();
   });

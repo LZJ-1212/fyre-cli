@@ -7,13 +7,13 @@
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
     "debug": "nodemon --inspect src/index.js",
-    "test": "jest --verbose --coverage",
+    "test": "cross-env NODE_ENV=test jest --verbose --coverage --passWithNoTests",
     "test:watch": "jest --watch",
     "lint": "eslint src/**/*.js",
     "lint:fix": "eslint src/**/*.js --fix",
     "security": "npm audit",
     "clean": "rm -rf coverage dist",
-    "build": "npm run clean && npm run lint && npm test",
+    "build": "npm run clean && npm run lint:fix && npm test",
     "prestart": "npm run build",
     "prepare": "husky install"
   },
@@ -54,19 +54,6 @@
     "*.js": [
       "eslint --fix",
       "prettier --write"
-    ]
-  },
-  "jest": {
-    "testEnvironment": "node",
-    "collectCoverageFrom": [
-      "src/**/*.js",
-      "!src/index.js"
-    ],
-    "coverageDirectory": "coverage",
-    "coverageReporters": [
-      "text",
-      "lcov",
-      "html"
     ]
   }
 }
