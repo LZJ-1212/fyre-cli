@@ -6,12 +6,17 @@ const router = express.Router();
  * @description 检查API健康状况
  * @access Public
  */
-router.get('/health', (req, res) => {
+router.get('/', (req, res) => {
   res.status(200).json({
-    status: 'OK',
-    message: 'API服务运行正常',
+    message: 'API 服务运行正常',
+    version: process.env.npm_package_version || '1.0.0',
     timestamp: new Date().toISOString(),
-    version: process.env.npm_package_version || '1.0.0'
+    endpoints: [
+      '/api/health',
+      '/api/users',
+      '/api/users/:id',
+      '/api/docs'
+    ]
   });
 });
 
