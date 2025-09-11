@@ -19,12 +19,12 @@ const TEMPLATES = {
   react: {
     name: 'React',
     description: 'React项目模板',
-    dir: 'react'
+    dir: 'react-app'
   },
   vue: {
     name: 'Vue',
     description: 'Vue项目模板',
-    dir: 'vue'
+    dir: 'vue-app'
   }
 };
 
@@ -58,15 +58,43 @@ async function processFiles(dir, replacements) {
 }
 
 // 检查模板完整性
-async function checkTemplateIntegrity(templateDir) {
-  const requiredFiles = [
-    'package.json',
-    'src/index.js',
-    'src/routes/api.js',
-    '.env.example',
-    '.gitignore',
-    'README.md'
-  ];
+async function checkTemplateIntegrity(templateDir, templateType) {
+  // 根据模板类型定义必需文件
+  let requiredFiles = [];
+  
+  if (templateType === 'node') {
+    requiredFiles = [
+      'package.json',
+      'src/index.js',
+      'src/routes/api.js',
+      '.env.example',
+      '.gitignore',
+      'README.md'
+    ];
+  } else if (templateType === 'react') {
+    requiredFiles = [
+      'package.json',
+      'src/main.jsx',
+      'src/App.jsx',
+      'src/index.css',
+      'src/App.css',
+      'index.html',
+      'vite.config.js',
+      '.gitignore',
+      'README.md'
+    ];
+  } else if (templateType === 'vue') {
+    // Vue 模板的必需文件
+    requiredFiles = [
+      'package.json',
+      'src/main.js',
+      'src/App.vue',
+      'index.html',
+      'vite.config.js',
+      '.gitignore',
+      'README.md'
+    ];
+  }
 
   const missingFiles = [];
 
