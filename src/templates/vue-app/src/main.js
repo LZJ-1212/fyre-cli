@@ -1,11 +1,8 @@
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
-import { createRouter, createWebHistory } from 'vue-router'
+import router from './router'
 import App from './App.vue'
 import './style.css'
-
-// 导入路由配置
-import routes from './router'
 
 // 错误处理函数
 const errorHandler = (err, vm, info) => {
