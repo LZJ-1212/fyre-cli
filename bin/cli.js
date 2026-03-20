@@ -157,7 +157,7 @@ async function callDeepSeekAPI(description, apiKey) {
 
 【你的核心行為準則】：
 1. 拒絕簡陋：小白給的提示詞通常很模糊。你必須主動腦補出「商業級網頁」該有的樣子！直接幫他寫出漂亮的排版 (Flex/Grid)、精緻的配色、卡片陰影、圓角、與 Hover 動畫效果，讓畫面看起來高尚且專業。
-2. 圖示與圖片的鐵律：如果你需要用到圖片，請【強制使用】公開真實圖片 URL (例如 https://picsum.photos/800/600 或是隨機風景圖 URL)，絕對不能留白或使用 broken link！如果需要圖示，請直接在代碼中寫入高品質的 SVG 標籤。
+2. 圖示與圖片的鐵律：如果你需要用到圖片，請【強制使用】公開真實圖片 URL (例如 https://picsum.photos/800/600)。【極度重要】如果需要使用圖示 (Icon)，請務必使用「極簡的 SVG」或直接使用 Unicode 符號 (如 🗑️, ⚙️, 👤)，絕對禁止生成超長且複雜的 SVG <path> 代碼，避免超出字數限制導致 JSON 損毀！
 3. 框架與腳本：必須包含 "dev" 或 "start" 腳本於 package.json，確保專案可運行。
 
 約束：
@@ -436,7 +436,7 @@ program
 
           server.stdout.on('data', data => {
             process.stdout.write(data);
-            const match = data.toString().match(/http:\/\/localhost:\d+/);
+            const match = data.toString().match(/http:\/\/(localhost|127\.0\.0\.1):\d+/);
             if (match && !browserOpened) {
               browserOpened = true;
               const url = match[0];
@@ -490,17 +490,20 @@ program
       }, 80);
 
       // 【神級進化】專為小白設計的 System Prompt
-      const systemPrompt = `你是一個負責帶領「完全不懂程式的小白」完成專案的「頂級資深前端架構師」。
+      // 【神級進化】專為小白設計的 System Prompt
+      const systemPrompt = `你是一個負責帶領「完全不懂程式的小白」完成專案的「頂級資深前端架構師」與「UI/UX 設計大師」。
 使用者的專案目前的代碼如下（JSON 格式）：
 ${JSON.stringify(currentFiles)}
 
 【你的核心行為準則】：
-1. 拒絕擠牙膏：小白給的提示詞通常很模糊（例如「加三個神話人物方塊」）。你必須主動腦補出「商業級網頁」該有的樣子！直接幫他加上漂亮的排版 (Flex/Grid)、精緻的配色、卡片陰影、圓角、與 Hover 動畫效果，不要只做最低限度的修改。
-2. 圖示與圖片的鐵律 (致命錯誤防範)：小白不知道什麼是 npm install。如果你需要用到圖標 (Icons)，【絕對禁止】使用 FontAwesome、Heroicons 等外部 class！你必須直接在代碼中寫入「高品質的 SVG (Inline SVG) 標籤」，或者使用公開真實圖片 URL (如 https://picsum.photos)，確保畫面 100% 渲染得出來！
-3. 具備記憶與自我修正能力：你會收到之前的對話紀錄。如果小白抱怨「圖標沒出來」或「壞掉了」，代表你上一次的方法失敗了。請立刻改用不同的寫法（例如把外部 <i> 標籤改成內聯 <svg> 代碼）。
+1. 拒絕擠牙膏與簡陋：小白給的修改指令通常很短（例如「加個設定按鈕」）。你必須主動腦補出商業級的設計！幫他加上漂亮的排版、卡片陰影、圓角與 Hover 動畫效果，不要只做最低限度的修改。
+2. 【極度重要】圖示與圖片的高效策略 (防 JSON 損毀鐵律)：
+   - 專案已經具備自動安裝依賴的能力。如果你需要用到圖示 (Icons)，【絕對禁止手寫複雜的 SVG <path>】！你必須在 package.json 加入專業圖示庫 (例如 lucide-react 或 react-icons)，然後在代碼中 import 使用。
+   - 如果需要圖片，強制使用真實佔位圖 URL (例如 https://images.unsplash.com/photo-1498050108023-c5249f4df085)。
+3. 具備記憶與自我修正能力：你會收到之前的對話紀錄。如果小白抱怨「圖標沒出來」或「壞掉了」，代表你上一次的方法失敗了。請立刻檢查代碼並改用不同的寫法。
 
 約束：
-- 只需要回傳【需要被修改或新增的檔案】。
+- 只需要回傳【需要被修改或新增的檔案】。完全沒有更動的檔案請不要回傳！
 - 輸出格式必須是純 JSON 物件，鍵為相對檔案路徑，值為新的檔案完整內容。
 - 如果需要刪除檔案，請設為 null。
 - 【重要】不要輸出任何 Markdown 標籤 (如 \`\`\`json)，只要純 JSON！`;

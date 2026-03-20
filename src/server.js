@@ -34,17 +34,30 @@ app.post('/api/generate', (req, res) => {
   try {
     const child = spawn(process.execPath, args, {
       cwd: process.cwd(),
-      env: { ...process.env, FORCE_COLOR: '1' } 
+      env: { ...process.env, FORCE_COLOR: '1' }
     });
 
     child.stdout.on('data', (data) => {
       // 同步印在黑色的終端機視窗，方便我們監控
-      process.stdout.write(data); 
-      res.write(data);
+      const text = data.toString();
+      process.stdout.write(text);
+      res.write(text);
+
+      // 【核心修復】當偵測到專案的 Dev Server 啟動網址時，主動結束前端請求
+      // 支援 localhost 或是 127.0.0.1 格式
+      if (text.match(/http:\/\/(localhost|127\.0\.0\.1):\d+/)) {
+        // 稍微延遲 500 毫秒，確保最後一段日誌傳送完畢，然後強制結束 HTTP 回應
+        setTimeout(() => {
+          if (!res.writableEnded) {
+            res.write('\n\x1b[32m[系統提示] 專案伺服器已啟動，Web UI 準備解除鎖定！\x1b[0m\n');
+            res.end(); // 這行會讓前端的 fetch() 成功 resolve，進入下一個畫面！
+          }
+        }, 500);
+      }
     });
 
     child.stderr.on('data', (data) => {
-      process.stderr.write(data); 
+      process.stderr.write(data);
       res.write(`\x1b[31m${data.toString()}\x1b[0m`);
     });
 
@@ -100,15 +113,15 @@ app.post('/api/modify', (req, res) => {
   try {
     const child = spawn(process.execPath, args, {
       cwd: process.cwd(),
-      env: { ...process.env, FORCE_COLOR: '1' } 
+      env: { ...process.env, FORCE_COLOR: '1' }
     });
 
     child.stdout.on('data', (data) => {
-      process.stdout.write(data); 
+      process.stdout.write(data);
       res.write(data);
     });
     child.stderr.on('data', (data) => {
-      process.stderr.write(data); 
+      process.stderr.write(data);
       res.write(`\x1b[31m${data.toString()}\x1b[0m`);
     });
 
