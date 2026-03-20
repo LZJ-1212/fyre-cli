@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="zh-TW" class="dark">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CodeCraft - 智能專案生成與修改助理</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: { colors: { brand: '#3b82f6' } }
+            }
+        }
+    </script>
+    <style>
+        /* 終端機與聊天室滾動條樣式 */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #4b5563;
+            border-radius: 4px;
+        }
+
+        .cursor-blink {
+            animation: blink 1s step-end infinite;
+        }
+
+        @keyframes blink {
+            50% {
+                opacity: 0;
+            }
+        }
+
+        /* 淡入淡出動畫 */
+        .fade-in {
+            animation: fadeIn 0.5s ease-in-out forwards;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+    </style>
+</head>
+
+<body class="bg-gray-900 text-gray-100 min-h-screen font-sans">
+
+    <div class="max-w-7xl mx-auto px-4 py-8 grid grid-cols-1 lg:grid-cols-12 gap-8">
+
+        <div class="bg-gray-800 rounded-xl shadow-2xl p-6 border border-gray-700 lg:col-span-5 flex flex-col h-[700px]">
+            <div class="flex items-center space-x-3 mb-6 shrink-0">
+                <div
+                    class="w-10 h-10 rounded-full bg-brand flex items-center justify-center text-xl font-bold shadow-lg shadow-blue-500/50">
+                    <i class="fa-solid fa-code"></i>
+                </div>
+                <h1 class="text-2xl font-bold tracking-wider">CodeCraft <span class="text-brand">Agent</span></h1>
+            </div>
+
+            <form id="generate-form" class="space-y-5 overflow-y-auto flex-1 pr-2">
+                <div>
+                    <label class="block text-sm font-medium text-gray-400 mb-1">🤖 描述您的專案 (Project Description)</label>
+                    <textarea id="description" rows="4" required
+                        class="w-full bg-gray-900 border border-gray-600 rounded-lg p-3 text-white focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand placeholder-gray-500"
+                        placeholder="例如：建立一個包含深色模式的 React 待辦事項清單，使用 Tailwind CSS..."></textarea>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-400 mb-1">📁 輸出目錄名稱 (選填)</label>
+                    <input type="text" id="output"
+                        class="w-full bg-gray-900 border border-gray-600 rounded-lg p-3 text-white focus:outline-none focus:border-brand placeholder-gray-500"
+                        placeholder="預設將自動生成隨機名稱">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-400 mb-1">🔑 DeepSeek API Key</label>
+                    <input type="password" id="apiKey"
+                        class="w-full bg-gray-900 border border-gray-600 rounded-lg p-3 text-white focus:outline-none focus:border-brand placeholder-gray-500"
+                        placeholder="sk-...">
+                </div>
+                <div class="bg-gray-900 p-4 rounded-lg border border-gray-700 space-y-3">
+                    <label class="flex items-center space-x-3 cursor-pointer">
+                        <input type="checkbox" id="install" checked
+                            class="form-checkbox h-5 w-5 text-brand rounded bg-gray-700 border-gray-600 focus:ring-brand">
+                        <span class="text-gray-300">自動安裝依賴並啟動預覽</span>
+                    </label>
+                    <label class="flex items-center space-x-3 cursor-pointer">
+                        <input type="checkbox" id="test"
+                            class="form-checkbox h-5 w-5 text-brand rounded bg-gray-700 border-gray-600 focus:ring-brand">
+                        <span class="text-gray-300">啟用 AI 自動測試與回滾</span>
+                    </label>
+                </div>
+                <button type="submit" id="submit-btn"
+                    class="w-full bg-brand hover:bg-blue-600 text-white font-bold py-3 px-4 rounded-lg transition duration-200 flex items-center justify-center space-x-2 shadow-lg shadow-blue-500/30">
+                    <i class="fa-solid fa-wand-magic-sparkles"></i>
+                    <span>開始 AI 生成專案</span>
+                </button>
+            </form>
+
+            <div id="chat-interface" class="hidden flex-col flex-1 h-full overflow-hidden fade-in">
+                <div id="chat-history" class="flex-1 overflow-y-auto space-y-4 mb-4 pr-2">
+                    <div class="flex items-start space-x-3">
+                        <div class="w-8 h-8 rounded-full bg-brand flex items-center justify-center shrink-0"><i
+                                class="fa-solid fa-robot text-sm"></i></div>
+                        <div class="bg-gray-700 rounded-lg p-3 text-sm text-gray-200 border border-gray-600 shadow-md">
+                            🎉 專案已經成功建立！<br><br>現在我們進入了<strong
+                                class="text-green-400">「持續修改模式」</strong>。<br>你想對目前的專案進行什麼調整？（例如：「幫我把按鈕改成紅色」、「新增一個 About
+                            頁面」）
+                        </div>
+                    </div>
+                </div>
+                <form id="chat-form" class="flex items-center space-x-2 shrink-0">
+                    <input type="text" id="chat-input" required autocomplete="off"
+                        class="flex-1 bg-gray-900 border border-gray-600 rounded-lg p-3 text-white focus:outline-none focus:border-brand placeholder-gray-500 text-sm"
+                        placeholder="輸入修改指令...">
+                    <button type="submit" id="chat-submit-btn"
+                        class="bg-brand hover:bg-blue-600 text-white p-3 rounded-lg transition duration-200 flex items-center justify-center w-12 h-12">
+                        <i class="fa-solid fa-paper-plane"></i>
+                    </button>
+                </form>
+                <button id="reset-btn" type="button"
+                    class="mt-3 w-full bg-gray-700 hover:bg-gray-600 text-gray-300 py-2 rounded-lg text-sm transition">
+                    <i class="fa-solid fa-rotate-right mr-2"></i>結束當前專案，建立新專案
+                </button>
+            </div>
+
+        </div>
+
+        <div
+            class="bg-[#0D1117] rounded-xl shadow-2xl border border-gray-700 flex flex-col h-[700px] lg:col-span-7 overflow-hidden">
+            <div class="bg-gray-800 px-4 py-2 flex items-center justify-between border-b border-gray-700 shrink-0">
+                <div class="flex items-center space-x-2">
+                    <div class="w-3 h-3 rounded-full bg-red-500"></div>
+                    <div class="w-3 h-3 rounded-full bg-yellow-500"></div>
+                    <div class="w-3 h-3 rounded-full bg-green-500"></div>
+                    <span class="text-xs text-gray-400 ml-2 font-mono">codecraft-terminal ~</span>
+                </div>
+                <button id="clear-term-btn" class="text-gray-500 hover:text-white transition text-xs" title="清空終端機">
+                    <i class="fa-solid fa-trash-can"></i>
+                </button>
+            </div>
+            <div id="console-output"
+                class="flex-1 p-4 font-mono text-sm overflow-y-auto whitespace-pre-wrap break-words leading-relaxed">
+                <div class="text-gray-500 mb-2">Welcome to CodeCraft Web UI.</div>
+                <div class="text-green-400 mb-4">Ready to generate your next big idea.</div>
+                <span id="output-content"></span><span id="cursor"
+                    class="cursor-blink inline-block w-2 h-4 bg-gray-400 align-middle ml-1"></span>
+            </div>
+        </div>
+
+    </div>
+
+<script>
+    let activeProjectDir = ""; 
+    let activeApiKey = "";
+    // 【新增】對話記憶陣列
+    let chatHistoryContext = []; 
+
+    const form = document.getElementById('generate-form');
+    const submitBtn = document.getElementById('submit-btn');
+    const chatInterface = document.getElementById('chat-interface');
+    const chatForm = document.getElementById('chat-form');
+    const chatHistory = document.getElementById('chat-history');
+    const chatInput = document.getElementById('chat-input');
+    const outputContent = document.getElementById('output-content');
+    const consoleContainer = document.getElementById('console-output');
+
+    const scrollToBottom = (element) => { element.scrollTop = element.scrollHeight; };
+
+    const appendToConsole = (text) => {
+      let formattedText = text
+        .replace(/\x1b\[36m/g, '<span class="text-cyan-400">')
+        .replace(/\x1b\[32m/g, '<span class="text-green-400">')
+        .replace(/\x1b\[33m/g, '<span class="text-yellow-400">')
+        .replace(/\x1b\[31m/g, '<span class="text-red-400">')
+        .replace(/\x1b\[0m/g, '</span>');
+      outputContent.innerHTML += formattedText;
+      scrollToBottom(consoleContainer);
+    };
+
+    const addChatMessage = (role, text) => {
+      const isUser = role === 'user';
+      const icon = isUser ? '<i class="fa-solid fa-user text-sm"></i>' : '<i class="fa-solid fa-robot text-sm"></i>';
+      const bgColor = isUser ? 'bg-blue-600' : 'bg-gray-700';
+      const bubbleColor = isUser ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-200 border border-gray-600';
+      
+      const msgHTML = `
+        <div class="flex items-start space-x-3 fade-in ${isUser ? 'flex-row-reverse space-x-reverse' : ''}">
+          <div class="w-8 h-8 rounded-full ${bgColor} flex items-center justify-center shrink-0 shadow-md">${icon}</div>
+          <div class="rounded-lg p-3 text-sm shadow-md ${bubbleColor}">${text}</div>
+        </div>
+      `;
+      chatHistory.innerHTML += msgHTML;
+      scrollToBottom(chatHistory);
+    };
+
+    // 1. 生成專案表單提交
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const description = document.getElementById('description').value;
+      let outputDir = document.getElementById('output').value;
+      activeApiKey = document.getElementById('apiKey').value;
+      const install = document.getElementById('install').checked;
+      const test = document.getElementById('test').checked;
+
+      if (!outputDir) outputDir = 'ai-app-' + Math.floor(Date.now() / 1000);
+      activeProjectDir = outputDir;
+
+      // 【新增】初始化專案的第一個記憶
+      chatHistoryContext = [
+        { role: 'user', content: `建立專案: ${description}` },
+        { role: 'assistant', content: '專案基礎結構已生成。' }
+      ];
+
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i><span>生成中...</span>';
+      outputContent.innerHTML = '';
+      appendToConsole(`<span class="text-blue-400">$ codecraft ai-create "${description}"</span>\n\n`);
+
+      try {
+        const response = await fetch('/api/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ description, outputDir, apiKey: activeApiKey, install, test })
+        });
+
+        if (!response.ok) throw new Error(await response.text());
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          appendToConsole(decoder.decode(value, { stream: true }));
+        }
+
+        appendToConsole('\n<span class="text-green-400 font-bold">✨ 專案生成完畢！</span>\n');
+        
+        form.classList.add('hidden');
+        chatInterface.classList.remove('hidden');
+        chatInterface.classList.add('flex');
+
+      } catch (error) {
+        appendToConsole(`\n<span class="text-red-500 font-bold">❌ 發生錯誤: ${error.message}</span>\n`);
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i><span>重新生成</span>';
+      }
+    });
+
+    // 2. 聊天室修改表單提交
+    chatForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const message = chatInput.value.trim();
+      if (!message) return;
+
+      chatInput.value = '';
+      addChatMessage('user', message);
+      
+      // 【新增】將使用者的話加入記憶體
+      chatHistoryContext.push({ role: 'user', content: message });
+
+      const submitIcon = document.getElementById('chat-submit-btn');
+      submitIcon.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i>';
+      submitIcon.disabled = true;
+
+      appendToConsole(`\n<span class="text-yellow-400">$ codecraft ai-patch "${message}"</span>\n`);
+
+      try {
+        const response = await fetch('/api/modify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          // 【關鍵修改】把 history 一併送給後端
+          body: JSON.stringify({ projectDir: activeProjectDir, message, apiKey: activeApiKey, history: chatHistoryContext })
+        });
+
+        if (!response.ok) throw new Error(await response.text());
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          appendToConsole(decoder.decode(value, { stream: true }));
+        }
+
+        addChatMessage('ai', '✅ 修改指令已執行完畢！您可以查看瀏覽器預覽畫面。');
+        // 【新增】把 AI 的成功回應加入記憶體
+        chatHistoryContext.push({ role: 'assistant', content: '代碼已更新完成。' });
+
+      } catch (error) {
+        appendToConsole(`\n<span class="text-red-500 font-bold">❌ 修改失敗: ${error.message}</span>\n`);
+        addChatMessage('ai', '❌ 修改過程中發生錯誤，請查看右側終端機。');
+        chatHistoryContext.push({ role: 'assistant', content: '修改失敗。' });
+      } finally {
+        submitIcon.innerHTML = '<i class="fa-solid fa-paper-plane"></i>';
+        submitIcon.disabled = false;
+        chatInput.focus();
+      }
+    });
+
+    document.getElementById('clear-term-btn').addEventListener('click', () => { outputContent.innerHTML = ''; });
+    document.getElementById('reset-btn').addEventListener('click', () => { location.reload(); });
+  </script>
+</body>
+
+</html>
