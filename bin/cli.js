@@ -230,9 +230,48 @@ ${JSON.stringify(blueprint, null, 2)}
   return code;
 }
 
+// ==========================================
+// 第 2.5 層：網頁搜尋代理 (The Web Search Agent)
+// 職責：把報錯轉成精準的 Google 關鍵字，並爬取最新解法
+// ==========================================
+async function callWebSearchAgent(errorLog, apiKey) {
+  console.log(`\n🌐 [Web Search Agent] 正在啟動，準備上網尋找解決方案...`);
+
+  try {
+    // 1. 讓 AI 提煉出最精準的搜尋關鍵字 (加上環境上下文，防止搜到舊文章)
+    const queryPrompt = `你是一個精通 React 18 與 Vite 的資深工程師。請根據以下的報錯訊息，產生一句「最適合丟進 Google 搜尋」的英文關鍵字。
+    【報錯訊息】: ${errorLog}
+    【約束】:
+    1. 關鍵字必須包含 "React", "Vite" 等環境詞彙。
+    2. 只能輸出純文字的搜尋關鍵字，不要引號，不要任何解釋。`;
+
+    const response = await axios.post('https://api.deepseek.com/v1/chat/completions', {
+      model: 'deepseek-chat',
+      messages: [{ role: 'system', content: queryPrompt }],
+      temperature: 0.1
+    }, { headers: { Authorization: `Bearer ${apiKey}` } });
+
+    const searchQuery = response.data.choices[0].message.content.trim();
+    console.log(`🔍 [Web Search Agent] 產生搜尋關鍵字: "${searchQuery}"`);
+    console.log(`📡 [Web Search Agent] 正在讀取網路上的最新技術討論...`);
+
+    // 2. 呼叫 Jina Search API (直接回傳 Markdown 格式的搜尋結果)
+    const jinaRes = await axios.get(`https://s.jina.ai/${encodeURIComponent(searchQuery)}`);
+
+    // 取前 3000 個字元，避免查到的網頁太長導致 Token 爆炸
+    const searchResult = jinaRes.data.slice(0, 3000);
+    console.log(`✅ [Web Search Agent] 成功獲取網路解答！`);
+
+    return searchResult;
+  } catch (err) {
+    console.log(`⚠️ [Web Search Agent] 網路搜尋失敗 (${err.message})，將退回傳統盲修模式。`);
+    return ""; // 搜尋失敗就回傳空字串，不影響原本的 QA 流程
+  }
+}
+
 // 第三層：測試與除錯員 (The QA Agent)
 // 職責：閱讀終端機報錯，找出 Bug 並提供修正後的程式碼
-async function callQAAgent(errorLog, currentFiles, apiKey) {
+async function callQAAgent(errorLog, currentFiles, webSearchResult, apiKey) {
   const qaPrompt = `你是一位神級的 QA 測試工程師與除錯大師。
 【當前專案代碼】:
 ${JSON.stringify(currentFiles)}
@@ -240,14 +279,18 @@ ${JSON.stringify(currentFiles)}
 【終端機報錯訊息 (Error Log)】:
 ${errorLog}
 
+【網路搜尋到的可能解決方案 (Web Search Results)】:
+${webSearchResult ? webSearchResult : "無網路資料，請依賴自身知識判斷。"}
+
 【你的唯一任務】:
-根據上方的報錯訊息，找出是哪些檔案寫錯了（例如缺少 import、命名錯誤、套件未安裝、export 兜不起來等），並幫我把出錯的檔案修好。
+根據「報錯訊息」與「網路解決方案」，找出是哪些檔案寫錯了，並幫我把出錯的檔案修好。
+請特別注意網路解答中提到的 Vite 或 React 18 最新語法規範，不要使用過時的寫法。
 
 【極度重要約束】:
 1. 只需要回傳【需要被修改的檔案】。沒有更動的檔案請絕對不要回傳！
 2. 輸出格式必須是純 JSON 物件，鍵為相對檔案路徑，值為修正後的完整代碼內容。
 3. 嚴禁使用 Markdown 標籤 (如 \`\`\`json)，只要純文字 JSON！
-4. 如果報錯顯示缺少某個套件，除了修改代碼，請務必順便修改 package.json 把它加進去。`;
+4. 如果報錯顯示缺少某個套件，請務必順便修改 package.json 把它加進去。`;
 
   const response = await axios.post('https://api.deepseek.com/v1/chat/completions', {
     model: 'deepseek-chat',
@@ -653,6 +696,11 @@ program
       clearInterval(spinner);
       process.stdout.write('\r\x1b[32m✅ AI 修改方案生成完畢！                          \x1b[0m\n');
 
+      // 🌟 [時光機備份]
+      console.log('💾 正在建立修改前的防護存檔 (Git Checkpoint)...');
+      await runCommand('git', ['add', '.'], targetDir).catch(() => { });
+      await runCommand('git', ['commit', '-m', `Backup before ai-patch: ${message}`], targetDir).catch(() => { });
+
       console.log('🔧 正在將修改應用到專案中...');
       for (const [filePath, fileContent] of Object.entries(updatedFilesMap)) {
         if (filePath.includes('..') || path.isAbsolute(filePath)) continue;
@@ -666,7 +714,19 @@ program
           console.log(`  📝 更新: ${filePath}`);
         }
       }
-      console.log(`\n🎉 修改完成！`);
+
+      // 🌟 [時光機驗證]
+      console.log('🧪 正在驗證修改是否引發致命錯誤...');
+      try {
+        await runCommand('npm', ['run', 'build'], targetDir);
+        console.log(`\n🎉 修改完成且驗證通過！`);
+      } catch (err) {
+        console.log(`\x1b[31m❌ 警告：AI 的修改導致專案編譯失敗！\x1b[0m`);
+        console.log(`⏪ 正在觸發時光機回滾 (Rollback)，恢復上一版代碼...`);
+        await runCommand('git', ['reset', '--hard', 'HEAD'], targetDir);
+        await runCommand('git', ['clean', '-fd'], targetDir);
+        console.log(`\n✅ 專案已安全恢復！請嘗試換一種方式告訴 AI 您的需求。`);
+      }
 
     } catch (error) {
       if (spinner) clearInterval(spinner);
@@ -776,30 +836,101 @@ program
         } catch (error) {
           console.log(`\x1b[31m❌ [QA 測試] 編譯失敗！(已擷取錯誤紀錄)\x1b[0m`);
           if (attempt === maxRetries) {
-            console.log(`⚠️ 已達到最大自動修復次數。系統將保留當前進度，您可以透過 Web UI 手動請 AI 修復。`);
+            console.log(`⚠️ 已達到最大自動修復次數。`);
+            console.log(`\n🕵️ [審查員] 正在將錯誤翻譯為白話文，並生成決策選項...\n`);
+            try {
+              const errorLog = error.message.slice(-2000);
+              const reviewerPrompt = `你是一位資深產品經理與技術審查員。專案目前遇到編譯錯誤。
+【報錯訊息】:
+${errorLog}
+
+【你的任務】:
+1. 將冷冰冰的報錯訊息「翻譯」成完全不懂程式的小白能看懂的繁體中文解釋。
+2. 給出 3 個不同的解決方案讓小白選擇（例如：A. 拔除出錯的套件 B. 修改導入路徑 C. 換一種寫法）。
+
+【輸出約束】:
+必須為純 JSON 格式，絕對不可有 Markdown 標籤：
+{
+  "message": "親切的白話文解釋...",
+  "options": [
+    "選項 A 的具體描述",
+    "選項 B 的具體描述",
+    "選項 C 的具體描述"
+  ]
+}`;
+              const reviewerResponse = await axios.post('https://api.deepseek.com/v1/chat/completions', {
+                model: 'deepseek-chat',
+                messages: [{ role: 'system', content: reviewerPrompt }, { role: 'user', content: '請分析錯誤並給出選項。' }],
+                response_format: { type: 'json_object' },
+                temperature: 0.3
+              }, { headers: { Authorization: `Bearer ${apiKey}` } });
+
+              const reviewerContent = reviewerResponse.data.choices[0].message.content;
+              const jsonStart = reviewerContent.indexOf('{');
+              const jsonEnd = reviewerContent.lastIndexOf('}');
+              const reviewerJSON = reviewerContent.substring(jsonStart, jsonEnd + 1);
+
+              // 輸出這個特殊的秘密標籤，讓前端的 Web UI 攔截它！
+              console.log(`___REVIEWER_ACTION___:${reviewerJSON.replace(/\n/g, '')}`);
+            } catch (err) {
+              console.log(`⚠️ 審查員分析失敗: ${err.message}`);
+            }
             break;
           }
 
-          console.log(`\n🕵️ [QA Agent] 正在分析報錯並嘗試自動修復 (第 ${attempt} 次救援)...`);
+          console.log(`\n🕵️ [QA Agent] 正在啟動除錯程序 (第 ${attempt} 次救援)...`);
           const currentFiles = await readProjectFiles(targetDir);
-          // 只擷取最後 2000 個字元的報錯，避免 Token 超載
           const errorLog = error.message.slice(-2000);
 
           try {
-            const fixedFilesMap = await callQAAgent(errorLog, currentFiles, apiKey);
+            // 🌟 0. [RAG 聯網檢索] 讓 AI 上網查解法
+            const webSearchResult = await callWebSearchAgent(errorLog, apiKey);
+
+            // 🌟 1. [時光機備份] 在 AI 亂動程式碼之前，先強制存檔
+            console.log(`💾 [系統保護] 正在建立 Git 還原點...`);
+            await runCommand('git', ['add', '.'], targetDir).catch(() => { });
+            await runCommand('git', ['commit', '-m', `Auto backup before QA attempt ${attempt}`], targetDir).catch(() => { });
+
+            // 🌟 2. 套用 AI 的修復方案 (把網頁搜尋結果傳給 QA)
+            console.log(`🧠 [QA Agent] 正在統整網路解答與報錯，撰寫修復代碼...`);
+            const fixedFilesMap = await callQAAgent(errorLog, currentFiles, webSearchResult, apiKey);
+
+            // ===== 以下是必須保留的寫入與驗證邏輯 =====
             for (const [filePath, fileContent] of Object.entries(fixedFilesMap)) {
               const absPath = path.join(targetDir, filePath);
               await fs.outputFile(absPath, fileContent, 'utf8');
-              console.log(`  🩹 QA 已自動修復: ${filePath}`);
+              console.log(`  🩹 QA 已嘗試修改: ${filePath}`);
             }
-            console.log(`\n🔄 [系統] 重新安裝套件並進行下一次測試...`);
+            console.log(`\n🔄 [系統] 重新安裝套件並驗證修復結果...`);
             await runCommand('npm', ['install'], targetDir);
+
+            // 🌟 3. [時光機驗證] 立即測試這次修復有沒有把專案搞得更糟
+            try {
+              await runCommand('npm', ['run', 'build'], targetDir);
+              // 如果執行到這裡，代表修復成功！
+              console.log(`\x1b[32m✅ [系統保護] QA 修復驗證成功！保留修改。\x1b[0m`);
+              testPassed = true;
+              break; // 跳出大迴圈
+            } catch (verifyErr) {
+              // 🌟 4. [時光機回滾] 修復失敗！立刻倒轉時間！
+              console.log(`\x1b[31m❌ [系統保護] QA 這次修復無效甚至更糟，觸發時光機回滾 (Rollback)！\x1b[0m`);
+              await runCommand('git', ['reset', '--hard', 'HEAD'], targetDir);
+              await runCommand('git', ['clean', '-fd'], targetDir); // 清除 AI 亂新增的檔案
+              console.log(`⏪ [系統保護] 代碼已安全恢復到修復前的狀態。`);
+
+              // 丟出錯誤讓外層迴圈繼續處理或進入 Reviewer
+              throw new Error("QA 修復驗證失敗");
+            }
+
           } catch (qaErr) {
-            console.log(`\x1b[31m❌ [QA Agent] 修復過程發生異常: ${qaErr.message}\x1b[0m`);
-            break;
+            if (qaErr.message !== "QA 修復驗證失敗") {
+              console.log(`\x1b[31m❌ [QA Agent] 修復過程發生異常: ${qaErr.message}\x1b[0m`);
+            }
+            // 如果這是最後一次機會，就會進到下一輪的 Reviewer Modal
           }
         }
       }
+
 
       console.log(`\n🎉 專案 ${projectName} 已經由 AI 團隊合力完成！`);
       if (testPassed) {

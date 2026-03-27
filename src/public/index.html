@@ -62,6 +62,27 @@
 
 <body class="bg-gray-900 text-gray-100 min-h-screen font-sans">
 
+    <div id="reviewer-modal"
+        class="hidden fixed inset-0 bg-black/80 flex items-center justify-center z-50 fade-in backdrop-blur-sm">
+        <div class="bg-gray-800 rounded-xl shadow-2xl border border-gray-600 w-full max-w-2xl p-6 flex flex-col">
+            <div class="flex items-center space-x-3 mb-4">
+                <div class="w-10 h-10 rounded-full bg-yellow-500 flex items-center justify-center text-xl shadow-lg">
+                    <i class="fa-solid fa-user-tie text-gray-900"></i>
+                </div>
+                <h2 class="text-xl font-bold text-yellow-400">🤖 系統審查員的除錯建議</h2>
+            </div>
+            <div id="reviewer-message"
+                class="text-gray-200 mb-6 p-4 bg-gray-900 rounded-lg border border-gray-700 prose prose-sm prose-invert max-w-none">
+            </div>
+            <h3 class="text-sm font-bold text-gray-400 mb-3">請選擇您希望的修復方案：</h3>
+            <div id="reviewer-options" class="space-y-3">
+            </div>
+            <button id="reviewer-close-btn" class="mt-6 text-sm text-gray-500 hover:text-white underline text-center">
+                我先自己看看，不使用建議
+            </button>
+        </div>
+    </div>
+
     <div class="max-w-7xl mx-auto px-4 py-8 grid grid-cols-1 lg:grid-cols-12 gap-8">
 
         <div class="bg-gray-800 rounded-xl shadow-2xl p-6 border border-gray-700 lg:col-span-5 flex flex-col h-[700px]">
@@ -179,6 +200,36 @@
 
     <script>
         let activeProjectDir = "";
+
+        const showReviewerDialog = (data) => {
+            document.getElementById('reviewer-message').innerHTML = marked.parse(data.message);
+            const optionsContainer = document.getElementById('reviewer-options');
+            optionsContainer.innerHTML = '';
+
+            data.options.forEach((opt, index) => {
+                const btn = document.createElement('button');
+                const letters = ['A', 'B', 'C', 'D'];
+                btn.className = "w-full text-left bg-gray-700 hover:bg-brand text-gray-200 hover:text-white p-4 rounded-lg transition duration-200 border border-gray-600 hover:border-brand shadow-md flex items-start group";
+                btn.innerHTML = `<span class="font-bold text-yellow-400 group-hover:text-white mr-3 mt-0.5">方案 ${letters[index]}</span> <span class="flex-1 text-sm leading-relaxed">${opt}</span>`;
+
+                // 當使用者點擊選項時，自動把它當成對話發送給 AI
+                btn.onclick = () => {
+                    document.getElementById('reviewer-modal').classList.add('hidden');
+                    // 將選項填入聊天框並自動送出
+                    const chatInput = document.getElementById('chat-input');
+                    chatInput.value = `專案編譯發生錯誤，請採用這個方案修復：${opt}`;
+                    document.getElementById('chat-form').dispatchEvent(new Event('submit'));
+                };
+                optionsContainer.appendChild(btn);
+            });
+
+            document.getElementById('reviewer-modal').classList.remove('hidden');
+        };
+
+        document.getElementById('reviewer-close-btn').onclick = () => {
+            document.getElementById('reviewer-modal').classList.add('hidden');
+        };
+
         let activeApiKey = "";
         // 【新增】對話記憶陣列
         let chatHistoryContext = [];
@@ -314,10 +365,32 @@
 
                 const reader = response.body.getReader();
                 const decoder = new TextDecoder();
+                let fullOutput = "";
+                let isReviewerMode = false;
+
                 while (true) {
                     const { value, done } = await reader.read();
                     if (done) break;
-                    appendToConsole(decoder.decode(value, { stream: true }));
+                    const chunk = decoder.decode(value, { stream: true });
+                    fullOutput += chunk;
+
+                    // 攔截秘密標籤，不要印在終端機上
+                    if (chunk.includes('___REVIEWER_ACTION___')) {
+                        isReviewerMode = true;
+                        const visiblePart = chunk.split('___REVIEWER_ACTION___')[0];
+                        if (visiblePart) appendToConsole(visiblePart);
+                    } else if (!isReviewerMode) {
+                        appendToConsole(chunk);
+                    }
+                }
+
+                // 當日誌傳送完畢，檢查是否有審查員的建議
+                const reviewerMatch = fullOutput.match(/___REVIEWER_ACTION___:(.*)/);
+                if (reviewerMatch) {
+                    try {
+                        const reviewerData = JSON.parse(reviewerMatch[1].trim());
+                        showReviewerDialog(reviewerData);
+                    } catch (e) { console.error("解析審查員資料失敗", e); }
                 }
 
                 appendToConsole('\n<span class="text-green-400 font-bold">✨ 專案生成完畢！</span>\n');
