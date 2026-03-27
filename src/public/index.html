@@ -17,6 +17,23 @@
         }
     </script>
     <style>
+        /* 【新增】高質感斜線進度條動畫 */
+        @keyframes loading-stripes {
+            0% {
+                background-position: 1rem 0;
+            }
+
+            100% {
+                background-position: 0 0;
+            }
+        }
+
+        .progress-bar-animated {
+            background-image: linear-gradient(45deg, rgba(255, 255, 255, .15) 25%, transparent 25%, transparent 50%, rgba(255, 255, 255, .15) 50%, rgba(255, 255, 255, .15) 75%, transparent 75%, transparent);
+            background-size: 1rem 1rem;
+            animation: loading-stripes 1s linear infinite;
+        }
+
         /* 終端機與聊天室滾動條樣式 */
         ::-webkit-scrollbar {
             width: 8px;
@@ -340,19 +357,33 @@
             const install = document.getElementById('install').checked;
             const test = document.getElementById('test').checked;
 
-            if (!outputDir) outputDir = 'ai-app-' + Math.floor(Date.now() / 1000);
+            // 【修改】生成簡潔好看的檔名 (例如: codecraft-app-a3f2)
+            if (!outputDir) {
+                const shortId = Math.random().toString(36).substring(2, 6);
+                outputDir = 'codecraft-app-' + shortId;
+            }
             activeProjectDir = outputDir;
 
-            // 【新增】初始化專案的第一個記憶
             chatHistoryContext = [
                 { role: 'user', content: `建立專案: ${description}` },
                 { role: 'assistant', content: '專案基礎結構已生成。' }
             ];
 
             submitBtn.disabled = true;
-            submitBtn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i><span>生成中...</span>';
+            // 【修改】將按鈕變成超酷的動態進度條
+            submitBtn.innerHTML = `
+                <div class="absolute inset-0 bg-blue-500 progress-bar-animated rounded-lg"></div>
+                <span class="relative z-10 font-bold tracking-wider text-white drop-shadow-md flex items-center space-x-2">
+                    <i class="fa-solid fa-microchip fa-fade"></i>
+                    <span>Agentic Workflow 執行中...</span>
+                </span>
+            `;
+            // 確保按鈕有 relative 屬性來容納絕對定位的進度條
+            submitBtn.classList.add('relative', 'overflow-hidden');
+
             outputContent.innerHTML = '';
-            appendToConsole(`<span class="text-blue-400">$ codecraft ai-create "${description}"</span>\n\n`);
+            // 【修改】顯示為呼叫 ai-create-pro
+            appendToConsole(`<span class="text-blue-400">$ codecraft ai-create-pro "${description}"</span>\n\n`);
 
             try {
                 const response = await fetch('/api/generate', {

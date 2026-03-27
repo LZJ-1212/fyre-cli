@@ -21,7 +21,8 @@ app.post('/api/generate', (req, res) => {
   }
 
   const cliPath = path.resolve(__dirname, '../bin/cli.js');
-  const args = [cliPath, 'ai-create', description];
+  // 構建 CLI 命令 (改為呼叫支援多代理架構的 ai-create-pro)
+  const args = ['ai-create-pro', `"${description}"`];
 
   if (outputDir) args.push('-o', outputDir);
   if (apiKey) args.push('-k', apiKey);
