@@ -795,6 +795,10 @@ program
   .command('ai-create-pro <description>')
   .description('使用 Agentic Workflow (多代理架構) 生成大型真實專案')
   .option('-o, --output <dir>', '指定輸出目錄')
+  .option('-k, --api-key <key>', 'API 密鑰')
+  .option('-i, --install', '自動安裝依賴')
+  .option('--test', '執行自動編譯測試，失敗則回滾')
+  .option('-f, --force', '強制覆蓋')
   .action(async (description, options) => {
     try {
       const apiKey = await getApiKey(options);
