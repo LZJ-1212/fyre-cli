@@ -951,13 +951,53 @@ ${errorLog}
 
       console.log(`\n🎉 專案 ${projectName} 已經由 AI 團隊合力完成！`);
       if (testPassed) {
-        console.log(`👉 專案已經通過編譯測試！您可以直接執行：\n  cd ${projectName}\n  npm run dev\n`);
+        console.log(`👉 專案已經通過編譯測試！準備啟動伺服器...\n`);
+
+        if (options.install) {
+          const pkg = await fs.readJson(path.join(targetDir, 'package.json')).catch(() => ({}));
+          const runScript = pkg.scripts?.dev ? 'dev' : (pkg.scripts?.start ? 'start' : null);
+
+          if (runScript) {
+            const server = spawn('npm', ['run', runScript], {
+              cwd: targetDir,
+              shell: true,
+              detached: true,
+              stdio: ['ignore', 'pipe', 'pipe']
+            });
+
+            server.unref();
+
+            let browserOpened = false;
+            server.stdout.on('data', data => {
+              process.stdout.write(data);
+              const match = data.toString().match(/http:\/\/(localhost|127\.0\.0\.1):\d+/);
+              if (match && !browserOpened) {
+                browserOpened = true;
+                const url = match[0];
+                const openCmd = process.platform === 'win32' ? 'start' : (process.platform === 'darwin' ? 'open' : 'xdg-open');
+                spawn(openCmd, [url], { shell: true });
+
+                console.log('\n✅ 伺服器啟動成功！即將進入對話模式...');
+                process.exit(0);
+              }
+            });
+
+            server.stderr.on('data', data => {
+              process.stderr.write(data);
+            });
+
+            return; // 留在這裡等待伺服器啟動，不要直接結束
+          }
+        }
+        process.exit(0);
       } else {
         console.log(`👉 專案目前可能還有小部分 Bug，建議您使用 CodeCraft Web UI 載入專案繼續修改。\n`);
+        process.exit(0);
       }
 
     } catch (error) {
       console.error(`\n❌ 執行失敗: ${error.message}`);
+      process.exit(1);
     }
   });
 
