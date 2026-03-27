@@ -151,6 +151,123 @@ async function getApiKey(options) {
   return apiKey;
 }
 
+// ==========================================
+// 【進化版】多代理工作流 (Agentic Workflow)
+// ==========================================
+
+// 第一層：架構師 (The Architect Agent)
+// 職責：不寫程式碼，只規劃專案結構與 package.json 依賴
+async function callArchitectAgent(description, apiKey) {
+  const architectPrompt = `你是一位頂級的軟體架構師 (Software Architect)。你的任務是根據使用者的需求，規劃出一個完美、現代化、可擴展的專案檔案結構。
+【請注意】：
+1. 你「不需要」寫出具體的程式碼實現。
+2. 你只需要回傳該專案需要哪些「具體檔案」，以及該檔案的「職責簡述」。
+3. 【極度重要】只允許輸出「具體的檔案名稱」(包含副檔名，如 .js, .jsx, .css)，絕對【不可以】輸出純資料夾 (如 src/assets/)！
+4. 必須包含 package.json，並在簡述中強制要求配置 Vite 構建工具與 "dev" 啟動腳本。
+5. 若為 React 專案，請務必規劃 vite.config.js。
+
+【輸出約束】：
+- 輸出必須是純 JSON 物件。
+- 鍵 (Key) 為檔案的相對路徑 (例如 "src/App.jsx" 或 "package.json")。
+- 值 (Value) 為該檔案的具體職責描述與需要包含的關鍵字。
+- 絕對不要輸出 Markdown 標籤 (如 \`\`\`json)，只要純 JSON。`;
+
+  console.log('\n👑 [架構師] 正在分析需求並繪製專案藍圖...');
+
+  const response = await axios.post('https://api.deepseek.com/v1/chat/completions', {
+    model: 'deepseek-chat',
+    messages: [
+      { role: 'system', content: architectPrompt },
+      { role: 'user', content: description }
+    ],
+    response_format: { type: 'json_object' },
+    temperature: 0.2 // 架構規劃需要極度嚴謹，所以溫度調低
+  }, { headers: { Authorization: `Bearer ${apiKey}` } });
+
+  const content = response.data.choices[0].message.content;
+  const jsonStart = content.indexOf('{');
+  const jsonEnd = content.lastIndexOf('}');
+  if (jsonStart === -1 || jsonEnd === -1) throw new Error('架構師沒有回傳有效的 JSON 藍圖');
+
+  const blueprint = JSON.parse(content.substring(jsonStart, jsonEnd + 1));
+  console.log('✅ [架構師] 藍圖繪製完畢！共規劃了', Object.keys(blueprint).length, '個檔案。');
+  return blueprint;
+}
+
+// 第二層：資深工程師 (The Coder Agent)
+// 職責：讀取藍圖，專心為「單一檔案」撰寫最高品質的程式碼
+async function callCoderAgent(filePath, fileRole, blueprint, description, apiKey) {
+  const coderPrompt = `你是一位神級資深前端工程師，目前正在與架構師合作開發專案。
+【專案總需求】: ${description}
+【架構師的完整藍圖】: 
+${JSON.stringify(blueprint, null, 2)}
+
+【你的當前唯一任務】:
+請撰寫這個檔案的完整原始碼：\`${filePath}\`
+該檔案的具體職責是：${fileRole}
+
+【極度重要約束 (團隊協作鐵律)】:
+1. 嚴禁使用 Markdown 標籤 (如 \`\`\`javascript)。
+2. 只輸出純文字的代碼內容，絕對不要包含任何解釋！
+3. 【統一匯出規範】：為了避免多檔案協作時的 Import/Export 錯誤，所有 React 元件、Hooks、Contexts、常數，【強制全部使用具名匯出 (Named Exports)】（例如：export const MyComponent = ...），絕對禁止使用 export default！
+4. 【依賴套件規範】：絕對禁止 import 任何沒有在 package.json 藍圖中明確列出的第三方套件（例如：絕對禁止使用 prop-types）！
+5. 如果撰寫 package.json，請確保 "scripts" 包含 "dev": "vite"。
+6. 如果撰寫 index.html，請加上 <script type="module" src="/src/main.jsx"></script>。`;
+
+  const response = await axios.post('https://api.deepseek.com/v1/chat/completions', {
+    model: 'deepseek-chat',
+    messages: [
+      { role: 'system', content: coderPrompt },
+      { role: 'user', content: `請輸出 ${filePath} 的完整代碼。` }
+    ],
+    temperature: 0.1, // 降低溫度，確保代碼精準且不出錯
+    max_tokens: 8192
+  }, { headers: { Authorization: `Bearer ${apiKey}` } });
+
+  let code = response.data.choices[0].message.content;
+  // 清理 AI 可能不小心加上的 Markdown 標記
+  code = code.replace(/^```[\w-]*\n/i, '').replace(/```$/i, '').trim();
+  return code;
+}
+
+// 第三層：測試與除錯員 (The QA Agent)
+// 職責：閱讀終端機報錯，找出 Bug 並提供修正後的程式碼
+async function callQAAgent(errorLog, currentFiles, apiKey) {
+  const qaPrompt = `你是一位神級的 QA 測試工程師與除錯大師。
+【當前專案代碼】:
+${JSON.stringify(currentFiles)}
+
+【終端機報錯訊息 (Error Log)】:
+${errorLog}
+
+【你的唯一任務】:
+根據上方的報錯訊息，找出是哪些檔案寫錯了（例如缺少 import、命名錯誤、套件未安裝、export 兜不起來等），並幫我把出錯的檔案修好。
+
+【極度重要約束】:
+1. 只需要回傳【需要被修改的檔案】。沒有更動的檔案請絕對不要回傳！
+2. 輸出格式必須是純 JSON 物件，鍵為相對檔案路徑，值為修正後的完整代碼內容。
+3. 嚴禁使用 Markdown 標籤 (如 \`\`\`json)，只要純文字 JSON！
+4. 如果報錯顯示缺少某個套件，除了修改代碼，請務必順便修改 package.json 把它加進去。`;
+
+  const response = await axios.post('https://api.deepseek.com/v1/chat/completions', {
+    model: 'deepseek-chat',
+    messages: [
+      { role: 'system', content: qaPrompt },
+      { role: 'user', content: `專案編譯失敗了，請幫我修正報錯的檔案。` }
+    ],
+    response_format: { type: 'json_object' },
+    temperature: 0.1, // 除錯需要極度精準
+    max_tokens: 8192
+  }, { headers: { Authorization: `Bearer ${apiKey}` } });
+
+  const content = response.data.choices[0].message.content;
+  const jsonStart = content.indexOf('{');
+  const jsonEnd = content.lastIndexOf('}');
+  if (jsonStart === -1 || jsonEnd === -1) throw new Error('QA Agent 沒有回傳有效的 JSON 修正檔');
+
+  return JSON.parse(content.substring(jsonStart, jsonEnd + 1));
+}
+
 async function callDeepSeekAPI(description, apiKey) {
   const systemPrompt = `你是一個負責帶領「完全不懂程式的小白」完成專案的「頂級資深前端架構師」與「全端工程師」。請根據描述生成一個極具商業質感、且【功能完全真實可用】的專案。
 
@@ -584,6 +701,116 @@ program
       serverProcess.kill();
       process.exit();
     });
+  });
+
+program
+  .command('test-architect <description>')
+  .description('測試架構師代理')
+  .action(async (description) => {
+    const apiKey = await getApiKey({});
+    try {
+      const blueprint = await callArchitectAgent(description, apiKey);
+      console.log('\n📋 產出的架構藍圖如下：');
+      console.log(blueprint);
+    } catch (e) {
+      console.error(e);
+    }
+  });
+
+// 【終極武器】多代理協作生成指令
+program
+  .command('ai-create-pro <description>')
+  .description('使用 Agentic Workflow (多代理架構) 生成大型真實專案')
+  .option('-o, --output <dir>', '指定輸出目錄')
+  .action(async (description, options) => {
+    try {
+      const apiKey = await getApiKey(options);
+      const projectName = options.output || generateSafeProjectName(description);
+      const targetDir = path.resolve(process.cwd(), projectName);
+
+      console.log(`\n🚀 啟動 Agentic Workflow (多代理協作模式)...\n`);
+
+      // 第 1 步：呼叫架構師
+      const blueprint = await callArchitectAgent(description, apiKey);
+      const fileNames = Object.keys(blueprint);
+
+      console.log(`\n👷 [工程師] 收到藍圖，準備開始編寫 ${fileNames.length} 個檔案...\n`);
+      await fs.ensureDir(targetDir);
+
+      // 第 2 步：迴圈呼叫工程師 (逐一生成檔案)
+      let count = 1;
+      for (const [filePath, fileRole] of Object.entries(blueprint)) {
+        process.stdout.write(`⏳ (${count}/${fileNames.length}) 正在撰寫 ${filePath} ... `);
+        try {
+          // 呼叫工程師 AI
+          const code = await callCoderAgent(filePath, fileRole, blueprint, description, apiKey);
+
+          // 邊生成邊寫入本地端！不怕跑到一半斷線！
+          const absPath = path.join(targetDir, filePath);
+          await fs.outputFile(absPath, code, 'utf8');
+
+          console.log(`\x1b[32m✅ 完成!\x1b[0m`);
+        } catch (err) {
+          console.log(`\x1b[31m❌ 失敗: ${err.message}\x1b[0m`);
+        }
+        count++;
+      }
+
+      // ==========================================
+      // 第 3 步：QA Agent 自動測試與修復迴圈
+      // ==========================================
+      console.log(`\n📦 [系統] 正在自動安裝依賴套件 (npm install)...`);
+      await runCommand('npm', ['install'], targetDir);
+
+      console.log(`\n🧪 [系統] 正在執行編譯測試 (npm run build)...`);
+      let maxRetries = 2; // 最多允許 AI 自動修復 2 次
+      let testPassed = false;
+
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          // 嘗試編譯專案 (這是 Vite/React 抓 Bug 最準的方式)
+          await runCommand('npm', ['run', 'build'], targetDir);
+          console.log(`\x1b[32m✅ [QA 測試] 第 ${attempt} 次編譯測試通過！專案無嚴重 Bug！\x1b[0m`);
+          testPassed = true;
+          break; // 成功就跳出除錯迴圈
+        } catch (error) {
+          console.log(`\x1b[31m❌ [QA 測試] 編譯失敗！(已擷取錯誤紀錄)\x1b[0m`);
+          if (attempt === maxRetries) {
+            console.log(`⚠️ 已達到最大自動修復次數。系統將保留當前進度，您可以透過 Web UI 手動請 AI 修復。`);
+            break;
+          }
+
+          console.log(`\n🕵️ [QA Agent] 正在分析報錯並嘗試自動修復 (第 ${attempt} 次救援)...`);
+          const currentFiles = await readProjectFiles(targetDir);
+          // 只擷取最後 2000 個字元的報錯，避免 Token 超載
+          const errorLog = error.message.slice(-2000);
+
+          try {
+            const fixedFilesMap = await callQAAgent(errorLog, currentFiles, apiKey);
+            for (const [filePath, fileContent] of Object.entries(fixedFilesMap)) {
+              const absPath = path.join(targetDir, filePath);
+              await fs.outputFile(absPath, fileContent, 'utf8');
+              console.log(`  🩹 QA 已自動修復: ${filePath}`);
+            }
+            console.log(`\n🔄 [系統] 重新安裝套件並進行下一次測試...`);
+            await runCommand('npm', ['install'], targetDir);
+          } catch (qaErr) {
+            console.log(`\x1b[31m❌ [QA Agent] 修復過程發生異常: ${qaErr.message}\x1b[0m`);
+            break;
+          }
+        }
+      }
+
+      console.log(`\n🎉 專案 ${projectName} 已經由 AI 團隊合力完成！`);
+      if (testPassed) {
+        console.log(`👉 專案已經通過編譯測試！您可以直接執行：\n  cd ${projectName}\n  npm run dev\n`);
+      } else {
+        console.log(`👉 專案目前可能還有小部分 Bug，建議您使用 CodeCraft Web UI 載入專案繼續修改。\n`);
+      }
+
+    } catch (error) {
+      console.error(`\n❌ 執行失敗: ${error.message}`);
+    }
   });
 
 program.parse(process.argv);

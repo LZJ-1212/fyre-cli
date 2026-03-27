@@ -227,57 +227,57 @@
         };
 
         // 【新增】載入現有專案邏輯
-    const loadForm = document.getElementById('load-form');
-    const loadSection = document.getElementById('load-section');
+        const loadForm = document.getElementById('load-form');
+        const loadSection = document.getElementById('load-section');
 
-    loadForm.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const dirName = document.getElementById('load-dir').value.trim();
-      activeApiKey = document.getElementById('apiKey').value.trim();
+        loadForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const dirName = document.getElementById('load-dir').value.trim();
+            activeApiKey = document.getElementById('apiKey').value.trim();
 
-      if (!activeApiKey) {
-        appendToConsole('\n<span class="text-red-500 font-bold">❌ 請先在上方輸入 DeepSeek API Key！</span>\n');
-        return;
-      }
+            if (!activeApiKey) {
+                appendToConsole('\n<span class="text-red-500 font-bold">❌ 請先在上方輸入 DeepSeek API Key！</span>\n');
+                return;
+            }
 
-      appendToConsole(`\n<span class="text-blue-400">$ 正在嘗試讀取專案: ${dirName}...</span>\n`);
+            appendToConsole(`\n<span class="text-blue-400">$ 正在嘗試讀取專案: ${dirName}...</span>\n`);
 
-      try {
-        const res = await fetch('/api/load', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ projectDir: dirName })
+            try {
+                const res = await fetch('/api/load', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ projectDir: dirName })
+                });
+                const data = await res.json();
+
+                if (!res.ok) throw new Error(data.error);
+
+                // 載入成功，恢復記憶
+                activeProjectDir = dirName;
+                chatHistoryContext = data.history || [];
+
+                appendToConsole(`<span class="text-green-400 font-bold">✅ 專案 ${dirName} 載入成功！共恢復 ${chatHistoryContext.length} 條記憶。</span>\n`);
+
+                // 切換 UI
+                form.classList.add('hidden');
+                loadSection.classList.add('hidden');
+                chatInterface.classList.remove('hidden');
+                chatInterface.classList.add('flex');
+
+                // 渲染歷史對話
+                chatHistory.innerHTML = '';
+                if (chatHistoryContext.length === 0) {
+                    addChatMessage('ai', `✅ 專案 **${dirName}** 已載入！目前沒有歷史對話紀錄。\n\n請直接輸入指令開始修改代碼。`);
+                } else {
+                    chatHistoryContext.forEach(msg => {
+                        if (msg.role !== 'system') addChatMessage(msg.role === 'user' ? 'user' : 'ai', msg.content);
+                    });
+                    addChatMessage('ai', `✅ 專案 **${dirName}** 的記憶已恢復！您可以繼續修改了。`);
+                }
+            } catch (err) {
+                appendToConsole(`<span class="text-red-500 font-bold">❌ 載入失敗: ${err.message}</span>\n`);
+            }
         });
-        const data = await res.json();
-
-        if (!res.ok) throw new Error(data.error);
-
-        // 載入成功，恢復記憶
-        activeProjectDir = dirName;
-        chatHistoryContext = data.history || [];
-
-        appendToConsole(`<span class="text-green-400 font-bold">✅ 專案 ${dirName} 載入成功！共恢復 ${chatHistoryContext.length} 條記憶。</span>\n`);
-
-        // 切換 UI
-        form.classList.add('hidden');
-        loadSection.classList.add('hidden');
-        chatInterface.classList.remove('hidden');
-        chatInterface.classList.add('flex');
-
-        // 渲染歷史對話
-        chatHistory.innerHTML = '';
-        if (chatHistoryContext.length === 0) {
-           addChatMessage('ai', `✅ 專案 **${dirName}** 已載入！目前沒有歷史對話紀錄。\n\n請直接輸入指令開始修改代碼。`);
-        } else {
-           chatHistoryContext.forEach(msg => {
-             if (msg.role !== 'system') addChatMessage(msg.role === 'user' ? 'user' : 'ai', msg.content);
-           });
-           addChatMessage('ai', `✅ 專案 **${dirName}** 的記憶已恢復！您可以繼續修改了。`);
-        }
-      } catch (err) {
-        appendToConsole(`<span class="text-red-500 font-bold">❌ 載入失敗: ${err.message}</span>\n`);
-      }
-    });
 
         // 1. 生成專案表單提交
         form.addEventListener('submit', async (e) => {
