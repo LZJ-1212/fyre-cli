@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ai-app-1774603970 | Professional Timer</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1><i class="fas fa-clock"></i> Precision Timer</h1>
+            <p class="subtitle">Track time with elegance and efficiency</p>
+        </header>
+        
+        <main class="main-content">
+            <div class="timer-card">
+                <div class="timer-display">
+                    <div class="time" id="timeDisplay">00:00:00</div>
+                    <div class="milliseconds" id="msDisplay">000</div>
+                </div>
+                
+                <div class="controls">
+                    <button class="btn btn-primary" id="startBtn">
+                        <i class="fas fa-play"></i> Start
+                    </button>
+                    <button class="btn btn-secondary" id="pauseBtn" disabled>
+                        <i class="fas fa-pause"></i> Pause
+                    </button>
+                    <button class="btn btn-danger" id="resetBtn">
+                        <i class="fas fa-redo"></i> Reset
+                    </button>
+                </div>
+                
+                <div class="lap-section">
+                    <div class="lap-header">
+                        <h3><i class="fas fa-flag"></i> Lap Times</h3>
+                        <button class="btn btn-outline" id="lapBtn">
+                            <i class="fas fa-plus"></i> Record Lap
+                        </button>
+                    </div>
+                    <div class="lap-list" id="lapList">
+                        <!-- Lap times will appear here -->
+                        <div class="empty-lap">No lap times recorded yet</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="fas fa-bullseye"></i>
+                    </div>
+                    <h3>Precision Timing</h3>
+                    <p>Accurate to the millisecond for professional use cases.</p>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="fas fa-history"></i>
+                    </div>
+                    <h3>Lap History</h3>
+                    <p>Record and review multiple lap times during your session.</p>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="fas fa-palette"></i>
+                    </div>
+                    <h3>Elegant Design</h3>
+                    <p>Clean, modern interface with smooth animations.</p>
+                </div>
+            </div>
+        </main>
+        
+        <footer class="footer">
+            <p>© 2026 ai-app-1774603970. Crafted with <i class="fas fa-heart"></i> by LZJ-1212 <2608599846@qq.com>.</p>
+        </footer>
+    </div>
+    
+    <script src="script.js"></script>
+</body>
+</html>

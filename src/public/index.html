@@ -6,6 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CodeCraft - 智能專案生成與修改助理</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script>
         tailwind.config = {
@@ -110,6 +111,19 @@
                 </button>
             </form>
 
+            <div id="load-section" class="mt-6 border-t border-gray-700 pt-6">
+                <h3 class="text-sm font-medium text-gray-400 mb-3">📂 載入現有專案繼續編輯</h3>
+                <form id="load-form" class="flex space-x-2">
+                    <input type="text" id="load-dir" required
+                        class="flex-1 bg-gray-900 border border-gray-600 rounded-lg p-3 text-white focus:outline-none focus:border-brand placeholder-gray-500 text-sm"
+                        placeholder="輸入您之前的專案資料夾名稱 (例如: ai-app-123)">
+                    <button type="submit"
+                        class="bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-6 rounded-lg transition duration-200 text-sm shadow-md">
+                        <i class="fa-solid fa-folder-open mr-2"></i>載入
+                    </button>
+                </form>
+            </div>
+
             <div id="chat-interface" class="hidden flex-col flex-1 h-full overflow-hidden fade-in">
                 <div id="chat-history" class="flex-1 overflow-y-auto space-y-4 mb-4 pr-2">
                     <div class="flex items-start space-x-3">
@@ -163,158 +177,216 @@
 
     </div>
 
-<script>
-    let activeProjectDir = ""; 
-    let activeApiKey = "";
-    // 【新增】對話記憶陣列
-    let chatHistoryContext = []; 
+    <script>
+        let activeProjectDir = "";
+        let activeApiKey = "";
+        // 【新增】對話記憶陣列
+        let chatHistoryContext = [];
 
-    const form = document.getElementById('generate-form');
-    const submitBtn = document.getElementById('submit-btn');
-    const chatInterface = document.getElementById('chat-interface');
-    const chatForm = document.getElementById('chat-form');
-    const chatHistory = document.getElementById('chat-history');
-    const chatInput = document.getElementById('chat-input');
-    const outputContent = document.getElementById('output-content');
-    const consoleContainer = document.getElementById('console-output');
+        const form = document.getElementById('generate-form');
+        const submitBtn = document.getElementById('submit-btn');
+        const chatInterface = document.getElementById('chat-interface');
+        const chatForm = document.getElementById('chat-form');
+        const chatHistory = document.getElementById('chat-history');
+        const chatInput = document.getElementById('chat-input');
+        const outputContent = document.getElementById('output-content');
+        const consoleContainer = document.getElementById('console-output');
 
-    const scrollToBottom = (element) => { element.scrollTop = element.scrollHeight; };
+        const scrollToBottom = (element) => { element.scrollTop = element.scrollHeight; };
 
-    const appendToConsole = (text) => {
-      let formattedText = text
-        .replace(/\x1b\[36m/g, '<span class="text-cyan-400">')
-        .replace(/\x1b\[32m/g, '<span class="text-green-400">')
-        .replace(/\x1b\[33m/g, '<span class="text-yellow-400">')
-        .replace(/\x1b\[31m/g, '<span class="text-red-400">')
-        .replace(/\x1b\[0m/g, '</span>');
-      outputContent.innerHTML += formattedText;
-      scrollToBottom(consoleContainer);
-    };
+        const appendToConsole = (text) => {
+            let formattedText = text
+                .replace(/\x1b\[36m/g, '<span class="text-cyan-400">')
+                .replace(/\x1b\[32m/g, '<span class="text-green-400">')
+                .replace(/\x1b\[33m/g, '<span class="text-yellow-400">')
+                .replace(/\x1b\[31m/g, '<span class="text-red-400">')
+                .replace(/\x1b\[0m/g, '</span>');
+            outputContent.innerHTML += formattedText;
+            scrollToBottom(consoleContainer);
+        };
 
-    const addChatMessage = (role, text) => {
-      const isUser = role === 'user';
-      const icon = isUser ? '<i class="fa-solid fa-user text-sm"></i>' : '<i class="fa-solid fa-robot text-sm"></i>';
-      const bgColor = isUser ? 'bg-blue-600' : 'bg-gray-700';
-      const bubbleColor = isUser ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-200 border border-gray-600';
-      
-      const msgHTML = `
+        const addChatMessage = (role, text) => {
+            const isUser = role === 'user';
+            const icon = isUser ? '<i class="fa-solid fa-user text-sm"></i>' : '<i class="fa-solid fa-robot text-sm"></i>';
+            const bgColor = isUser ? 'bg-blue-600' : 'bg-gray-700';
+            const bubbleColor = isUser ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-200 border border-gray-600';
+
+            // 將 AI 回覆進行 Markdown 解析，並加上 prose-invert 讓排版變好看
+            const renderText = isUser ? text : marked.parse(text);
+            // AI 的氣泡加上 prose class 來支援 Markdown 樣式
+            const extraClass = isUser ? '' : 'prose prose-sm prose-invert max-w-none';
+
+            const msgHTML = `
         <div class="flex items-start space-x-3 fade-in ${isUser ? 'flex-row-reverse space-x-reverse' : ''}">
           <div class="w-8 h-8 rounded-full ${bgColor} flex items-center justify-center shrink-0 shadow-md">${icon}</div>
-          <div class="rounded-lg p-3 text-sm shadow-md ${bubbleColor}">${text}</div>
+          <div class="rounded-lg p-3 text-sm shadow-md ${bubbleColor} ${extraClass}">${renderText}</div>
         </div>
       `;
-      chatHistory.innerHTML += msgHTML;
-      scrollToBottom(chatHistory);
-    };
+            chatHistory.innerHTML += msgHTML;
+            scrollToBottom(chatHistory);
+        };
 
-    // 1. 生成專案表單提交
-    form.addEventListener('submit', async (e) => {
+        // 【新增】載入現有專案邏輯
+    const loadForm = document.getElementById('load-form');
+    const loadSection = document.getElementById('load-section');
+
+    loadForm.addEventListener('submit', async (e) => {
       e.preventDefault();
-      
-      const description = document.getElementById('description').value;
-      let outputDir = document.getElementById('output').value;
-      activeApiKey = document.getElementById('apiKey').value;
-      const install = document.getElementById('install').checked;
-      const test = document.getElementById('test').checked;
+      const dirName = document.getElementById('load-dir').value.trim();
+      activeApiKey = document.getElementById('apiKey').value.trim();
 
-      if (!outputDir) outputDir = 'ai-app-' + Math.floor(Date.now() / 1000);
-      activeProjectDir = outputDir;
+      if (!activeApiKey) {
+        appendToConsole('\n<span class="text-red-500 font-bold">❌ 請先在上方輸入 DeepSeek API Key！</span>\n');
+        return;
+      }
 
-      // 【新增】初始化專案的第一個記憶
-      chatHistoryContext = [
-        { role: 'user', content: `建立專案: ${description}` },
-        { role: 'assistant', content: '專案基礎結構已生成。' }
-      ];
-
-      submitBtn.disabled = true;
-      submitBtn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i><span>生成中...</span>';
-      outputContent.innerHTML = '';
-      appendToConsole(`<span class="text-blue-400">$ codecraft ai-create "${description}"</span>\n\n`);
+      appendToConsole(`\n<span class="text-blue-400">$ 正在嘗試讀取專案: ${dirName}...</span>\n`);
 
       try {
-        const response = await fetch('/api/generate', {
+        const res = await fetch('/api/load', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ description, outputDir, apiKey: activeApiKey, install, test })
+          body: JSON.stringify({ projectDir: dirName })
         });
+        const data = await res.json();
 
-        if (!response.ok) throw new Error(await response.text());
+        if (!res.ok) throw new Error(data.error);
 
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        while (true) {
-          const { value, done } = await reader.read();
-          if (done) break;
-          appendToConsole(decoder.decode(value, { stream: true }));
-        }
+        // 載入成功，恢復記憶
+        activeProjectDir = dirName;
+        chatHistoryContext = data.history || [];
 
-        appendToConsole('\n<span class="text-green-400 font-bold">✨ 專案生成完畢！</span>\n');
-        
+        appendToConsole(`<span class="text-green-400 font-bold">✅ 專案 ${dirName} 載入成功！共恢復 ${chatHistoryContext.length} 條記憶。</span>\n`);
+
+        // 切換 UI
         form.classList.add('hidden');
+        loadSection.classList.add('hidden');
         chatInterface.classList.remove('hidden');
         chatInterface.classList.add('flex');
 
-      } catch (error) {
-        appendToConsole(`\n<span class="text-red-500 font-bold">❌ 發生錯誤: ${error.message}</span>\n`);
-        submitBtn.disabled = false;
-        submitBtn.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i><span>重新生成</span>';
+        // 渲染歷史對話
+        chatHistory.innerHTML = '';
+        if (chatHistoryContext.length === 0) {
+           addChatMessage('ai', `✅ 專案 **${dirName}** 已載入！目前沒有歷史對話紀錄。\n\n請直接輸入指令開始修改代碼。`);
+        } else {
+           chatHistoryContext.forEach(msg => {
+             if (msg.role !== 'system') addChatMessage(msg.role === 'user' ? 'user' : 'ai', msg.content);
+           });
+           addChatMessage('ai', `✅ 專案 **${dirName}** 的記憶已恢復！您可以繼續修改了。`);
+        }
+      } catch (err) {
+        appendToConsole(`<span class="text-red-500 font-bold">❌ 載入失敗: ${err.message}</span>\n`);
       }
     });
 
-    // 2. 聊天室修改表單提交
-    chatForm.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const message = chatInput.value.trim();
-      if (!message) return;
+        // 1. 生成專案表單提交
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
 
-      chatInput.value = '';
-      addChatMessage('user', message);
-      
-      // 【新增】將使用者的話加入記憶體
-      chatHistoryContext.push({ role: 'user', content: message });
+            const description = document.getElementById('description').value;
+            let outputDir = document.getElementById('output').value;
+            activeApiKey = document.getElementById('apiKey').value;
+            const install = document.getElementById('install').checked;
+            const test = document.getElementById('test').checked;
 
-      const submitIcon = document.getElementById('chat-submit-btn');
-      submitIcon.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i>';
-      submitIcon.disabled = true;
+            if (!outputDir) outputDir = 'ai-app-' + Math.floor(Date.now() / 1000);
+            activeProjectDir = outputDir;
 
-      appendToConsole(`\n<span class="text-yellow-400">$ codecraft ai-patch "${message}"</span>\n`);
+            // 【新增】初始化專案的第一個記憶
+            chatHistoryContext = [
+                { role: 'user', content: `建立專案: ${description}` },
+                { role: 'assistant', content: '專案基礎結構已生成。' }
+            ];
 
-      try {
-        const response = await fetch('/api/modify', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          // 【關鍵修改】把 history 一併送給後端
-          body: JSON.stringify({ projectDir: activeProjectDir, message, apiKey: activeApiKey, history: chatHistoryContext })
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i><span>生成中...</span>';
+            outputContent.innerHTML = '';
+            appendToConsole(`<span class="text-blue-400">$ codecraft ai-create "${description}"</span>\n\n`);
+
+            try {
+                const response = await fetch('/api/generate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ description, outputDir, apiKey: activeApiKey, install, test })
+                });
+
+                if (!response.ok) throw new Error(await response.text());
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                while (true) {
+                    const { value, done } = await reader.read();
+                    if (done) break;
+                    appendToConsole(decoder.decode(value, { stream: true }));
+                }
+
+                appendToConsole('\n<span class="text-green-400 font-bold">✨ 專案生成完畢！</span>\n');
+
+                form.classList.add('hidden');
+                chatInterface.classList.remove('hidden');
+                chatInterface.classList.add('flex');
+
+            } catch (error) {
+                appendToConsole(`\n<span class="text-red-500 font-bold">❌ 發生錯誤: ${error.message}</span>\n`);
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i><span>重新生成</span>';
+            }
         });
 
-        if (!response.ok) throw new Error(await response.text());
+        // 2. 聊天室修改表單提交
+        chatForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const message = chatInput.value.trim();
+            if (!message) return;
 
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        while (true) {
-          const { value, done } = await reader.read();
-          if (done) break;
-          appendToConsole(decoder.decode(value, { stream: true }));
-        }
+            chatInput.value = '';
+            addChatMessage('user', message);
 
-        addChatMessage('ai', '✅ 修改指令已執行完畢！您可以查看瀏覽器預覽畫面。');
-        // 【新增】把 AI 的成功回應加入記憶體
-        chatHistoryContext.push({ role: 'assistant', content: '代碼已更新完成。' });
+            // 【新增】將使用者的話加入記憶體
+            chatHistoryContext.push({ role: 'user', content: message });
 
-      } catch (error) {
-        appendToConsole(`\n<span class="text-red-500 font-bold">❌ 修改失敗: ${error.message}</span>\n`);
-        addChatMessage('ai', '❌ 修改過程中發生錯誤，請查看右側終端機。');
-        chatHistoryContext.push({ role: 'assistant', content: '修改失敗。' });
-      } finally {
-        submitIcon.innerHTML = '<i class="fa-solid fa-paper-plane"></i>';
-        submitIcon.disabled = false;
-        chatInput.focus();
-      }
-    });
+            const submitIcon = document.getElementById('chat-submit-btn');
+            submitIcon.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i>';
+            submitIcon.disabled = true;
 
-    document.getElementById('clear-term-btn').addEventListener('click', () => { outputContent.innerHTML = ''; });
-    document.getElementById('reset-btn').addEventListener('click', () => { location.reload(); });
-  </script>
+            appendToConsole(`\n<span class="text-yellow-400">$ codecraft ai-patch "${message}"</span>\n`);
+
+            try {
+                const response = await fetch('/api/modify', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    // 【關鍵修改】把 history 一併送給後端
+                    body: JSON.stringify({ projectDir: activeProjectDir, message, apiKey: activeApiKey, history: chatHistoryContext })
+                });
+
+                if (!response.ok) throw new Error(await response.text());
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                while (true) {
+                    const { value, done } = await reader.read();
+                    if (done) break;
+                    appendToConsole(decoder.decode(value, { stream: true }));
+                }
+
+                addChatMessage('ai', '✅ 修改指令已執行完畢！您可以查看瀏覽器預覽畫面。');
+                // 【新增】把 AI 的成功回應加入記憶體
+                chatHistoryContext.push({ role: 'assistant', content: '代碼已更新完成。' });
+
+            } catch (error) {
+                appendToConsole(`\n<span class="text-red-500 font-bold">❌ 修改失敗: ${error.message}</span>\n`);
+                addChatMessage('ai', '❌ 修改過程中發生錯誤，請查看右側終端機。');
+                chatHistoryContext.push({ role: 'assistant', content: '修改失敗。' });
+            } finally {
+                submitIcon.innerHTML = '<i class="fa-solid fa-paper-plane"></i>';
+                submitIcon.disabled = false;
+                chatInput.focus();
+            }
+        });
+
+        document.getElementById('clear-term-btn').addEventListener('click', () => { outputContent.innerHTML = ''; });
+        document.getElementById('reset-btn').addEventListener('click', () => { location.reload(); });
+    </script>
 </body>
 
 </html>

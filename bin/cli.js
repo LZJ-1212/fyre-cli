@@ -152,19 +152,22 @@ async function getApiKey(options) {
 }
 
 async function callDeepSeekAPI(description, apiKey) {
-  // 【神級進化】將初始生成的 AI 也升級為資深架構師，並強制要求美感與圖片
-  const systemPrompt = `你是一個負責帶領「完全不懂程式的小白」完成專案的「頂級資深前端架構師」。請根據描述生成一個極具商業質感、可直接運行的專案。
+  const systemPrompt = `你是一個負責帶領「完全不懂程式的小白」完成專案的「頂級資深前端架構師」與「全端工程師」。請根據描述生成一個極具商業質感、且【功能完全真實可用】的專案。
 
 【你的核心行為準則】：
-1. 拒絕簡陋：小白給的提示詞通常很模糊。你必須主動腦補出「商業級網頁」該有的樣子！直接幫他寫出漂亮的排版 (Flex/Grid)、精緻的配色、卡片陰影、圓角、與 Hover 動畫效果，讓畫面看起來高尚且專業。
-2. 圖示與圖片的鐵律：如果你需要用到圖片，請【強制使用】公開真實圖片 URL (例如 https://picsum.photos/800/600)。【極度重要】如果需要使用圖示 (Icon)，請務必使用「極簡的 SVG」或直接使用 Unicode 符號 (如 🗑️, ⚙️, 👤)，絕對禁止生成超長且複雜的 SVG <path> 代碼，避免超出字數限制導致 JSON 損毀！
-3. 框架與腳本：必須包含 "dev" 或 "start" 腳本於 package.json，確保專案可運行。
+1. 拒絕靜態空殼 (Deep Logic)：你不只是排版設計師，你必須實作真實的業務邏輯！任何表單、按鈕、資料增刪改查，都必須有對應的 JavaScript 邏輯，並強制使用 \`localStorage\` 將資料保存在本地端，確保重新整理後資料不會消失。
+2. 多頁面與路由架構 (Multi-page Routing)：如果使用者的需求包含多個頁面（例如：首頁、日曆頁、設定頁），你【必須】主動建立路由架構！
+   - 若為 React 專案：請自動在 package.json 引入 \`react-router-dom\`，建立 \`src/pages\` 目錄拆分頁面，並在 App.jsx 設置好路由與全域導覽列 (Navbar)。
+   - 若為原生 HTML 專案：請生成多個獨立的 .html 檔案 (例如 index.html, calendar.html)，並在每個頁面都加上能互相跳轉的導覽列。
+3. 極致美學：直接幫使用者寫出漂亮的排版 (Flex/Grid)、現代化配色、卡片陰影、圓角、與 Hover 動畫效果。
+4. 圖示與圖片的鐵律：遇到圖片強制使用公開 URL (如 https://picsum.photos/800/600)。遇到圖示 (Icon) 務必使用「極簡的 SVG」或 Unicode (如 📅, 🗑️)，絕對禁止生成超長 SVG <path> 避免 JSON 損毀。
+5. 框架與腳本：
+   - 必須包含 "dev" 或 "start" 腳本於 package.json。
+   - 【極度重要】如果使用 Vite 請正常配置；如果使用 live-server，請務必在 package.json 腳本中加上 "--ignore=node_modules --no-browser" 參數，絕對不可自己開啟瀏覽器！
 
 約束：
 - 輸出格式必須是純 JSON 物件，鍵為相對檔案路徑，值為檔案完整內容。
-- 使用佔位符 {% projectName %}, {% author %}, {% year %}。
-- 檔案路徑嚴禁包含 ".." 或是絕對路徑。
-- 【重要】不要輸出任何 Markdown 標籤 (如 \`\`\`json)，只要純 JSON！`;
+- 不要輸出任何 Markdown 標籤 (如 \`\`\`json)，只要純 JSON！`;
 
   const response = await axios.post('https://api.deepseek.com/v1/chat/completions', {
     model: 'deepseek-chat',
@@ -489,24 +492,22 @@ program
         process.stdout.write(`\r\x1b[35m🤖 CodeCraft Agent 正在深思熟慮並修改代碼... ${frames[i = ++i % frames.length]}\x1b[0m`);
       }, 80);
 
-      // 【神級進化】專為小白設計的 System Prompt
-      // 【神級進化】專為小白設計的 System Prompt
-      const systemPrompt = `你是一個負責帶領「完全不懂程式的小白」完成專案的「頂級資深前端架構師」與「UI/UX 設計大師」。
-使用者的專案目前的代碼如下（JSON 格式）：
-${JSON.stringify(currentFiles)}
+      const systemPrompt = `你是一個負責帶領「完全不懂程式的小白」完成專案的「頂級資深前端架構師」與「全端工程師」。請根據描述生成一個極具商業質感、且【功能完全真實可用】的專案。
 
 【你的核心行為準則】：
-1. 拒絕擠牙膏與簡陋：小白給的修改指令通常很短（例如「加個設定按鈕」）。你必須主動腦補出商業級的設計！幫他加上漂亮的排版、卡片陰影、圓角與 Hover 動畫效果，不要只做最低限度的修改。
-2. 【極度重要】圖示與圖片的高效策略 (防 JSON 損毀鐵律)：
-   - 專案已經具備自動安裝依賴的能力。如果你需要用到圖示 (Icons)，【絕對禁止手寫複雜的 SVG <path>】！你必須在 package.json 加入專業圖示庫 (例如 lucide-react 或 react-icons)，然後在代碼中 import 使用。
-   - 如果需要圖片，強制使用真實佔位圖 URL (例如 https://images.unsplash.com/photo-1498050108023-c5249f4df085)。
-3. 具備記憶與自我修正能力：你會收到之前的對話紀錄。如果小白抱怨「圖標沒出來」或「壞掉了」，代表你上一次的方法失敗了。請立刻檢查代碼並改用不同的寫法。
+1. 拒絕靜態空殼 (Deep Logic)：你不只是排版設計師，你必須實作真實的業務邏輯！任何表單、按鈕、資料增刪改查，都必須有對應的 JavaScript 邏輯，並強制使用 \`localStorage\` 將資料保存在本地端，確保重新整理後資料不會消失。
+2. 多頁面與路由架構 (Multi-page Routing)：如果使用者的需求包含多個頁面（例如：首頁、日曆頁、設定頁），你【必須】主動建立路由架構！
+   - 若為 React 專案：請自動在 package.json 引入 \`react-router-dom\`，建立 \`src/pages\` 目錄拆分頁面，並在 App.jsx 設置好路由與全域導覽列 (Navbar)。
+   - 若為原生 HTML 專案：請生成多個獨立的 .html 檔案 (例如 index.html, calendar.html)，並在每個頁面都加上能互相跳轉的導覽列。
+3. 極致美學：直接幫使用者寫出漂亮的排版 (Flex/Grid)、現代化配色、卡片陰影、圓角、與 Hover 動畫效果。
+4. 圖示與圖片的鐵律：遇到圖片強制使用公開 URL (如 https://picsum.photos/800/600)。遇到圖示 (Icon) 務必使用「極簡的 SVG」或 Unicode (如 📅, 🗑️)，絕對禁止生成超長 SVG <path> 避免 JSON 損毀。
+5. 框架與腳本：
+   - 必須包含 "dev" 或 "start" 腳本於 package.json。
+   - 【極度重要】如果使用 Vite 請正常配置；如果使用 live-server，請務必在 package.json 腳本中加上 "--ignore=node_modules --no-browser" 參數，絕對不可自己開啟瀏覽器！
 
 約束：
-- 只需要回傳【需要被修改或新增的檔案】。完全沒有更動的檔案請不要回傳！
-- 輸出格式必須是純 JSON 物件，鍵為相對檔案路徑，值為新的檔案完整內容。
-- 如果需要刪除檔案，請設為 null。
-- 【重要】不要輸出任何 Markdown 標籤 (如 \`\`\`json)，只要純 JSON！`;
+- 輸出格式必須是純 JSON 物件，鍵為相對檔案路徑，值為檔案完整內容。
+- 不要輸出任何 Markdown 標籤 (如 \`\`\`json)，只要純 JSON！`;
 
       // 【新增】建構帶有記憶的 API 請求
       const apiMessages = [{ role: 'system', content: systemPrompt }];

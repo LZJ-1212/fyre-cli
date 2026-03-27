@@ -135,6 +135,24 @@ app.post('/api/modify', (req, res) => {
   }
 });
 
+// 【新增】讀取現有專案與對話紀錄的 API
+app.post('/api/load', (req, res) => {
+  const { projectDir } = req.body;
+  const targetPath = path.resolve(process.cwd(), projectDir);
+
+  if (!fs.existsSync(targetPath)) {
+    return res.status(404).json({ error: `找不到專案目錄: ${projectDir}` });
+  }
+
+  let history = [];
+  const historyFile = path.join(targetPath, '.codecraft-chat.json');
+  if (fs.existsSync(historyFile)) {
+    try { history = JSON.parse(fs.readFileSync(historyFile, 'utf8')); } catch (e) { }
+  }
+
+  res.json({ success: true, history });
+});
+
 app.listen(PORT, () => {
   console.log(`\n✅ 伺服器已套用【終極除錯版】代碼！誤殺機制已解除！`);
   console.log(`🚀 CodeCraft Web GUI 伺服器已啟動！`);
