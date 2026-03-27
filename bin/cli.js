@@ -594,9 +594,18 @@ program
         const runScript = pkg.scripts?.dev ? 'dev' : (pkg.scripts?.start ? 'start' : null);
 
         if (runScript) {
-          const server = spawn('npm', ['run', runScript], { cwd: targetDir, shell: true });
-          let browserOpened = false;
+          // 加上 detached: true，並把 stdio 設為 ignore 或特定配置，讓它在背景獨立運行
+          const server = spawn('npm', ['run', runScript], {
+            cwd: targetDir,
+            shell: true,
+            detached: true, // 允許在背景執行
+            stdio: ['ignore', 'pipe', 'pipe']
+          });
 
+          // 讓 Node.js 主程式不要等待這個子程式結束
+          server.unref();
+
+          let browserOpened = false;
           server.stdout.on('data', data => {
             process.stdout.write(data);
             const match = data.toString().match(/http:\/\/(localhost|127\.0\.0\.1):\d+/);
@@ -605,6 +614,10 @@ program
               const url = match[0];
               const openCmd = process.platform === 'win32' ? 'start' : (process.platform === 'darwin' ? 'open' : 'xdg-open');
               spawn(openCmd, [url], { shell: true });
+
+              // 【關鍵修復】抓到網址、打開瀏覽器後，強制結束這個 CLI 進程，讓 Web UI 收到成功訊號！
+              console.log('\n✅ 伺服器啟動成功！即將進入對話模式...');
+              process.exit(0);
             }
           });
 
