@@ -352,6 +352,108 @@ async function writeGeneratedFiles(targetDir, filesMap) {
   }
 }
 
+const parser = require('@babel/parser');
+const traverse = require('@babel/traverse').default;
+const generator = require('@babel/generator').default;
+
+/**
+ * [核心功能] AST 骨架提取器 (AST Skeleton Extractor)
+ * 將超大 JS/JSX 檔案壓縮為只包含函數簽名的骨架，大幅降低 LLM Token 消耗
+ */
+function extractCodeSkeleton(code) {
+  try {
+    // 1. 將程式碼解析為抽象語法樹 (AST)
+    const ast = parser.parse(code, {
+      sourceType: "module",
+      plugins: ["jsx", "typescript"] // 支援 React 和 TS 語法
+    });
+
+    // 2. 遍歷並修剪 AST
+    traverse(ast, {
+      // 攔截所有函數宣告
+      FunctionDeclaration(path) {
+        if (path.node.body && path.node.body.type === 'BlockStatement') {
+          // 清空函數體，只留下 // ... implementation hidden 註解
+          path.node.body.body = [];
+          path.addComment('inner', ' ... implementation hidden ', false);
+        }
+      },
+      // 攔截所有箭頭函數 (如 const myFunc = () => {})
+      ArrowFunctionExpression(path) {
+        if (path.node.body && path.node.body.type === 'BlockStatement') {
+          path.node.body.body = [];
+          path.addComment('inner', ' ... implementation hidden ', false);
+        }
+      },
+      // 攔截類別中的方法
+      ClassMethod(path) {
+        if (path.node.body && path.node.body.type === 'BlockStatement') {
+          path.node.body.body = [];
+          path.addComment('inner', ' ... implementation hidden ', false);
+        }
+      }
+    });
+
+    // 3. 從修剪後的 AST 重新生成程式碼
+    const skeletonCode = generator(ast, {
+      retainLines: false,
+      compact: false
+    }).code;
+
+    return skeletonCode;
+  } catch (err) {
+    console.warn('⚠️ AST 解析失敗，退回原始文字模式:', err.message);
+    return code; // 若解析失敗（例如遇到極端語法錯誤），則退回原本的完整代碼
+  }
+}
+
+/**
+ * [核心功能] AST 精準嫁接器 (AST Grafter)
+ * 將 AI 生成的局部函數代碼，無縫替換回原始巨型檔案中，不破壞其他邏輯
+ */
+function injectASTNode(originalCode, aiPatchCode) {
+  try {
+    const originalAst = parser.parse(originalCode, { sourceType: "module", plugins: ["jsx", "typescript"] });
+    const patchAst = parser.parse(aiPatchCode, { sourceType: "module", plugins: ["jsx", "typescript"] });
+
+    let newNodes = []; // 收集 AI 提供的所有有效函數/類別節點
+
+    traverse(patchAst, {
+      FunctionDeclaration(path) { newNodes.push(path.node); },
+      VariableDeclaration(path) { if (path.node.declarations[0].init?.type === 'ArrowFunctionExpression') newNodes.push(path.node); }
+    });
+
+    if (newNodes.length === 0) return originalCode; // 如果沒找到可替換的節點，原樣返回
+
+    let replaced = false;
+    traverse(originalAst, {
+      FunctionDeclaration(path) {
+        const matchingNode = newNodes.find(n => n.type === 'FunctionDeclaration' && n.id?.name === path.node.id?.name);
+        if (matchingNode) {
+          path.replaceWith(matchingNode);
+          path.skip();
+          replaced = true;
+        }
+      },
+      VariableDeclarator(path) {
+        const matchingNode = newNodes.find(n => n.type === 'VariableDeclaration' && n.declarations[0].id?.name === path.node.id?.name);
+        if (matchingNode && path.node.init?.type === 'ArrowFunctionExpression') {
+          path.parentPath.replaceWith(matchingNode);
+          path.skip();
+          replaced = true;
+        }
+      }
+    });
+
+    if (!replaced) throw new Error("在原始代碼中找不到對應的函數名稱進行替換");
+
+    return generator(originalAst, { retainLines: false }).code;
+  } catch (err) {
+    console.warn(`\n⚠️ AST 嫁接失敗: ${err.message}，將退回全覆寫模式。`);
+    return null;
+  }
+}
+
 // ==========================================
 // 【新增】AI 專案修改模組 (AI Patching)
 // ==========================================
@@ -385,10 +487,15 @@ async function readProjectFiles(targetDir) {
         if (allowedExts.includes(ext) || entry.name === 'Dockerfile' || entry.name.startsWith('.env')) {
           const stat = await fs.stat(fullPath);
 
-          // 【優化】安全上限提高到 500KB (約五十萬字元)，保證高品質代碼不會被腰斬
           if (stat.size < 500 * 1024) {
-            const content = await fs.readFile(fullPath, 'utf8');
-            // 將 Windows 系統的路徑斜線標準化
+            let content = await fs.readFile(fullPath, 'utf8');
+
+            // 【AST 智慧切片接入】: 若文件超過 15KB (約 500 行)，自動啟用骨架提取，防止 LLM 上下文爆炸
+            if (stat.size > 15 * 1024 && (ext === '.js' || ext === '.jsx' || ext === '.ts' || ext === '.tsx')) {
+              console.log(`\n  🌲 [AST 壓縮] 檔案 ${relPath} 較大，自動啟動 AST 骨架提取...`);
+              content = extractCodeSkeleton(content);
+            }
+
             filesMap[relPath.replace(/\\/g, '/')] = content;
           } else {
             console.warn(`\n⚠️ 警告: ${relPath} 檔案超過 500KB，為防止 AI 超載已自動略過。`);
@@ -679,7 +786,8 @@ program
    - 【極度重要】如果使用 Vite 請正常配置；如果使用 live-server，請務必在 package.json 腳本中加上 "--ignore=node_modules --no-browser" 參數，絕對不可自己開啟瀏覽器！
 
 約束：
-- 輸出格式必須是純 JSON 物件，鍵為相對檔案路徑，值為檔案完整內容。
+- 輸出格式必須是純 JSON 物件，鍵為相對檔案路徑，值為程式碼內容。
+- 【AST 局部修改鐵律】：如果你收到的檔案內容是被壓縮過的骨架（包含 "// ... implementation hidden"），請【絕對不要】回傳整個檔案！你只需要回傳你修改的那一個完整的 Function 或 Class 代碼片段即可，系統會自動進行 AST 語法樹嫁接。
 - 不要輸出任何 Markdown 標籤 (如 \`\`\`json)，只要純 JSON！`;
 
       // 【新增】建構帶有記憶的 API 請求
@@ -723,7 +831,23 @@ program
           await fs.remove(absPath);
           console.log(`  🗑️  刪除: ${filePath}`);
         } else {
-          await fs.outputFile(absPath, fileContent, 'utf8');
+          let finalContent = fileContent;
+
+          // 【AST 智慧防護與嫁接】如果原始檔案存在且超過 15KB，且 AI 回傳的代碼極短（代表是局部片段）
+          if (fs.existsSync(absPath)) {
+            const stat = await fs.stat(absPath);
+            if (stat.size > 15 * 1024 && fileContent.length < stat.size * 0.5) {
+              console.log(`  🌲 偵測到局部修改，啟動 AST 精準嫁接: ${filePath}`);
+              const originalCode = await fs.readFile(absPath, 'utf8');
+              const graftedCode = injectASTNode(originalCode, fileContent);
+              if (graftedCode) {
+                finalContent = graftedCode;
+                console.log(`  ✅ AST 嫁接成功！`);
+              }
+            }
+          }
+
+          await fs.outputFile(absPath, finalContent, 'utf8');
           console.log(`  📝 更新: ${filePath}`);
         }
       }

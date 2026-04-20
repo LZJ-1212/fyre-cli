@@ -76,7 +76,28 @@ app.post('/api/generate', (req, res) => {
       res.end();
     });
 
-    // 【重要修復】已經徹底刪除 req.on('close') 的誤殺機制！
+    // 【架构级修复：进程生命周期强力接管】
+    // 监听前端请求意外中断（如用户刷新页面、关闭浏览器）
+    req.on('close', () => {
+      if (!res.writableEnded) {
+        console.warn('\n⚠️ [系統警告] 偵測到前端連線異常中斷！');
+        // 確保子程序仍存活時才進行擊殺
+        if (child && child.pid && !child.killed) {
+          console.warn(`🔪 正在強制終止孤立的 AI 子程序 (PID: ${child.pid})...`);
+          try {
+            // Windows 系統需要特殊的強制擊殺方式，防止子進程殘留
+            if (process.platform === 'win32') {
+              const { exec } = require('child_process');
+              exec(`taskkill /pid ${child.pid} /T /F`);
+            } else {
+              child.kill('SIGKILL');
+            }
+          } catch (e) {
+            console.error('無法終止程序:', e);
+          }
+        }
+      }
+    });
 
   } catch (error) {
     console.error('\n❌ 伺服器發生例外:', error);
@@ -99,12 +120,24 @@ app.post('/api/modify', (req, res) => {
 
   // 【新增】將前端傳來的對話紀錄，寫入專案目錄下的隱藏記憶檔
   try {
-    const targetPath = path.resolve(process.cwd(), projectDir);
+    const basePath = process.cwd();
+    const targetPath = path.resolve(basePath, projectDir);
+
+    // 嚴格校驗：確保解析後的路徑必須以當前工作目錄為前綴，防範目錄穿越 (Path Traversal)
+    if (!targetPath.startsWith(basePath)) {
+      res.write('\n\x1b[31m❌ [系統安全防禦] 偵測到非法越權路徑訪問！請求已被攔截。\x1b[0m\n');
+      return res.end();
+    }
+
     if (history && fs.existsSync(targetPath)) {
-      fs.writeFileSync(path.join(targetPath, '.codecraft-chat.json'), JSON.stringify(history));
+      // 使用格式化的 JSON (包含縮排) 以利於後續 Debug，而不是擠成一行的字串
+      fs.writeFileSync(path.join(targetPath, '.codecraft-chat.json'), JSON.stringify(history, null, 2));
     }
   } catch (err) {
-    console.warn('⚠️ 無法寫入歷史紀錄:', err.message);
+    // 必須使用 error 級別而非 warn，並在發生寫入異常時中斷後續 AI 呼叫，避免資料不同步
+    console.error('❌ 致命錯誤：無法寫入歷史紀錄。', err.stack);
+    res.write(`\n\x1b[31m[系統錯誤] 歷史記憶寫入失敗: ${err.message}\x1b[0m\n`);
+    return res.end();
   }
 
   const cliPath = path.resolve(__dirname, '../bin/cli.js');
@@ -130,16 +163,43 @@ app.post('/api/modify', (req, res) => {
       if (code !== 0) res.write(`\n\x1b[31m[系統提示] 修改程序異常結束 (代碼: ${code})\x1b[0m\n`);
       res.end();
     });
+
+    // 【补齐进程生命周期强力接管】
+    req.on('close', () => {
+      if (!res.writableEnded) {
+        console.warn('\n⚠️ [系統警告] 偵測到前端連線異常中斷 (Modify API)！');
+        if (child && child.pid && !child.killed) {
+          console.warn(`🔪 正在強制終止孤立的 AI 子程序 (PID: ${child.pid})...`);
+          try {
+            if (process.platform === 'win32') {
+              require('child_process').exec(`taskkill /pid ${child.pid} /T /F`);
+            } else {
+              child.kill('SIGKILL');
+            }
+          } catch (e) { }
+        }
+      }
+    });
   } catch (error) {
     res.write(`\n\x1b[31m[伺服器錯誤] ${error.message}\x1b[0m\n`);
     res.end();
   }
 });
 
-// 【新增】讀取現有專案與對話紀錄的 API
 app.post('/api/load', (req, res) => {
   const { projectDir } = req.body;
-  const targetPath = path.resolve(process.cwd(), projectDir);
+
+  if (!projectDir || typeof projectDir !== 'string') {
+    return res.status(400).json({ error: '無效的專案目錄參數' });
+  }
+
+  const basePath = process.cwd();
+  const targetPath = path.resolve(basePath, projectDir);
+
+  // 同步執行目錄穿越防護
+  if (!targetPath.startsWith(basePath)) {
+    return res.status(403).json({ error: '拒絕存取：越權目錄訪問' });
+  }
 
   if (!fs.existsSync(targetPath)) {
     return res.status(404).json({ error: `找不到專案目錄: ${projectDir}` });
@@ -147,8 +207,15 @@ app.post('/api/load', (req, res) => {
 
   let history = [];
   const historyFile = path.join(targetPath, '.codecraft-chat.json');
+
   if (fs.existsSync(historyFile)) {
-    try { history = JSON.parse(fs.readFileSync(historyFile, 'utf8')); } catch (e) { }
+    try {
+      history = JSON.parse(fs.readFileSync(historyFile, 'utf8'));
+    } catch (e) {
+      // 捕獲 JSON 格式損壞，向前端返回明確的錯誤狀態，而不是靜默吞噬
+      console.error(`❌ 解析歷史紀錄失敗 (${historyFile}):`, e.message);
+      return res.status(500).json({ error: '對話記憶檔案已損壞，請手動檢查或清除 .codecraft-chat.json' });
+    }
   }
 
   res.json({ success: true, history });
