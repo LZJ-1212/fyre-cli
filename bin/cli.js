@@ -585,17 +585,23 @@ program
   .action(() => {
     const serverPath = path.join(__dirname, '../src/server.js');
 
-    // 在背景啟動 Express 伺服器
-    const serverProcess = spawn('node', [serverPath], {
-      stdio: 'inherit',
-      shell: true
+    // 【架構升級】改用 process.execPath 並移除 shell: true，修復 DeprecationWarning 安全漏洞
+    const serverProcess = spawn(process.execPath, [serverPath], {
+      stdio: 'inherit'
     });
 
     // 延遲 1.5 秒等待伺服器啟動後，自動打開使用者的預設瀏覽器
     setTimeout(() => {
       const url = 'http://localhost:8080';
-      const openCmd = process.platform === 'win32' ? 'start' : (process.platform === 'darwin' ? 'open' : 'xdg-open');
-      spawn(openCmd, [url], { shell: true });
+      // 【終極修復】改用 exec 執行單一字串指令，徹底消除 Node 24 的 DEP0190 陣列傳遞警告
+      const { exec } = require('child_process');
+      if (process.platform === 'win32') {
+        exec(`start "" "${url}"`);
+      } else if (process.platform === 'darwin') {
+        exec(`open "${url}"`);
+      } else {
+        exec(`xdg-open "${url}"`);
+      }
     }, 1500);
 
     // 捕捉 Ctrl+C 來優雅關閉伺服器
@@ -628,16 +634,18 @@ program
   .option('-i, --install', '自動安裝依賴')
   .option('--test', '執行自動編譯測試，失敗則回滾')
   .option('-f, --force', '強制覆蓋')
+  .option('-l, --lang <language>', '專案生成語言 (預設: en)', 'en') // 👈 預設為英文
   .action(async (description, options) => {
     try {
       const apiKey = await getApiKey(options);
+      const lang = options.lang; // 👈 獲取語言設定
       const projectName = options.output || generateSafeProjectName(description);
       const targetDir = path.resolve(process.cwd(), projectName);
 
       console.log(`\n🚀 啟動 Agentic Workflow (多代理協作模式)...\n`);
 
-      // 第 1 步：呼叫架構師
-      const blueprint = await callArchitectAgent(description, apiKey);
+      // 第 1 步：呼叫架構師 (傳入 lang 參數)
+      const blueprint = await callArchitectAgent(description, apiKey, lang);
       const fileNames = Object.keys(blueprint);
 
       console.log(`\n👷 [工程師] 收到藍圖，準備開始編寫 ${fileNames.length} 個檔案...\n`);
@@ -648,8 +656,8 @@ program
       for (const [filePath, fileRole] of Object.entries(blueprint)) {
         process.stdout.write(`⏳ (${count}/${fileNames.length}) 正在撰寫 ${filePath} ... `);
         try {
-          // 呼叫工程師 AI
-          const code = await callCoderAgent(filePath, fileRole, blueprint, description, apiKey);
+          // 呼叫工程師 AI (傳入 lang 參數)
+          const code = await callCoderAgent(filePath, fileRole, blueprint, description, apiKey, lang);
 
           // 邊生成邊寫入本地端！不怕跑到一半斷線！
           const absPath = path.join(targetDir, filePath);
@@ -737,9 +745,9 @@ ${errorLog}
             await runCommand('git', ['add', '.'], targetDir).catch(() => { });
             await runCommand('git', ['commit', '-m', `Auto backup before QA attempt ${attempt}`], targetDir).catch(() => { });
 
-            // 🌟 2. 套用 AI 的修復方案 (把網頁搜尋結果傳給 QA)
+            // 🌟 2. 套用 AI 的修復方案 (把網頁搜尋結果傳遞給 QA，並加入 lang 參數)
             console.log(`🧠 [QA Agent] 正在統整網路解答與報錯，撰寫修復代碼...`);
-            const fixedFilesMap = await callQAAgent(errorLog, currentFiles, webSearchResult, apiKey);
+            const fixedFilesMap = await callQAAgent(errorLog, currentFiles, webSearchResult, apiKey, lang);
 
             // ===== 以下是必須保留的寫入與驗證邏輯 =====
             for (const [filePath, fileContent] of Object.entries(fixedFilesMap)) {

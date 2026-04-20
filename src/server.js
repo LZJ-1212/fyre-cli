@@ -32,6 +32,15 @@ app.post('/api/generate', (req, res) => {
 
   console.log('\n--- 🤖 準備啟動 AI 生成程序 ---');
 
+  // 【核心修復：心跳機制 Keep-Alive】防止瀏覽器因長時間等待而斷開連線
+  const heartbeat = setInterval(() => {
+    if (!res.writableEnded) {
+      res.write(' '); // 每秒發送一個空白字元，保持 HTTP 串流活躍
+    } else {
+      clearInterval(heartbeat);
+    }
+  }, 1000);
+
   try {
     const child = spawn(process.execPath, args, {
       cwd: process.cwd(),
@@ -63,6 +72,7 @@ app.post('/api/generate', (req, res) => {
     });
 
     child.on('close', (code, signal) => {
+      clearInterval(heartbeat); // 關閉心跳
       console.log(`\n--- 程序結束 (Code: ${code}, Signal: ${signal}) ---`);
       if (code !== 0) {
         res.write(`\n\x1b[31m[系統提示] 生成程序異常結束 (代碼: ${code}, 訊號: ${signal})\x1b[0m\n`);
@@ -71,6 +81,7 @@ app.post('/api/generate', (req, res) => {
     });
 
     child.on('error', (err) => {
+      clearInterval(heartbeat); // 關閉心跳
       console.error('\n❌ 子程序發生錯誤:', err);
       res.write(`\n\x1b[31m[系統錯誤] 無法啟動 CLI: ${err.message}\x1b[0m\n`);
       res.end();

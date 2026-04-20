@@ -299,7 +299,7 @@
         const loadSection = document.getElementById('load-section');
 
         loadForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
+            e.preventDefault(); // 【核心防護：阻止瀏覽器重新整理】
             const dirName = document.getElementById('load-dir').value.trim();
             activeApiKey = document.getElementById('apiKey').value.trim();
 
@@ -349,7 +349,7 @@
 
         // 1. 生成專案表單提交
         form.addEventListener('submit', async (e) => {
-            e.preventDefault();
+            e.preventDefault(); // 【核心防護：阻止瀏覽器重新整理】
 
             const description = document.getElementById('description').value;
             let outputDir = document.getElementById('output').value;
