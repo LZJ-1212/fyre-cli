@@ -12,8 +12,13 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.post('/api/generate', (req, res) => {
   const { description, outputDir, apiKey, install, test, force } = req.body;
 
-  // Grade A 標準：移除手動的 chunked 宣告，交由 Node.js 底層自動管理傳輸編碼
-  res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+  // [A級規範：強制寫入狀態碼、宣告長連線防斷、禁用快取，並立即刷新 TCP 標頭]
+  res.writeHead(200, {
+    'Content-Type': 'text/plain; charset=utf-8',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive'
+  });
+  res.flushHeaders();
 
   if (!apiKey && !process.env.DEEPSEEK_API_KEY) {
     res.write('\n\x1b[31m❌ 錯誤：請輸入 DeepSeek API Key。\x1b[0m\n');
@@ -73,26 +78,35 @@ app.post('/api/generate', (req, res) => {
     });
 
     child.on('close', (code, signal) => {
-      clearInterval(heartbeat); // 關閉心跳
+      clearInterval(heartbeat);
       console.log(`\n--- 程序結束 (Code: ${code}, Signal: ${signal}) ---`);
-      if (code !== 0) {
-        res.write(`\n\x1b[31m[系統提示] 生成程序異常結束 (代碼: ${code}, 訊號: ${signal})\x1b[0m\n`);
+
+      // [A级规范：拦截竞争条件，仅在流存活时写入]
+      if (!res.writableEnded) {
+        if (code !== 0) {
+          res.write(`\n\x1b[31m[系統提示] 生成程序異常結束 (代碼: ${code}, 訊號: ${signal})\x1b[0m\n`);
+        }
+        res.end();
       }
-      res.end();
     });
 
     child.on('error', (err) => {
-      clearInterval(heartbeat); // 關閉心跳
+      clearInterval(heartbeat);
       console.error('\n❌ 子程序發生錯誤:', err);
-      res.write(`\n\x1b[31m[系統錯誤] 無法啟動 CLI: ${err.message}\x1b[0m\n`);
-      res.end();
+
+      // [A级规范：拦截竞争条件]
+      if (!res.writableEnded) {
+        res.write(`\n\x1b[31m[系統錯誤] 無法啟動 CLI: ${err.message}\x1b[0m\n`);
+        res.end();
+      }
     });
 
     // 【架构级修复：进程生命周期强力接管】
     // 监听前端请求意外中断（如用户刷新页面、关闭浏览器）
     req.on('close', () => {
-      if (!res.writableEnded) {
-        console.warn('\n⚠️ [系統警告] 偵測到前端連線異常中斷！');
+      // [A級規範：必須結合 req.aborted，排除底層 Socket 自然釋放造成的誤判]
+      if (!res.writableEnded && req.aborted) {
+        console.warn('\n⚠️ [系統警告] 偵測到前端連線異常中斷！(Client Aborted)');
         // 確保子程序仍存活時才進行擊殺
         if (child && child.pid && !child.killed) {
           console.warn(`🔪 正在強制終止孤立的 AI 子程序 (PID: ${child.pid})...`);
@@ -123,7 +137,13 @@ app.post('/api/modify', (req, res) => {
   const { projectDir, message, apiKey, history } = req.body;
 
   // 保持全域架構一致性，移除冗餘標頭
-  res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+  // [A級規範：強制寫入狀態碼、宣告長連線防斷、禁用快取，並立即刷新 TCP 標頭]
+  res.writeHead(200, {
+    'Content-Type': 'text/plain; charset=utf-8',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive'
+  });
+  res.flushHeaders();
 
   if (!apiKey && !process.env.DEEPSEEK_API_KEY) {
     res.write('\n\x1b[31m❌ 錯誤：請確保 API Key 有效。\x1b[0m\n');
@@ -178,8 +198,9 @@ app.post('/api/modify', (req, res) => {
 
     // 【补齐进程生命周期强力接管】
     req.on('close', () => {
-      if (!res.writableEnded) {
-        console.warn('\n⚠️ [系統警告] 偵測到前端連線異常中斷 (Modify API)！');
+      // [A級規範：同步升級中斷判定]
+      if (!res.writableEnded && req.aborted) {
+        console.warn('\n⚠️ [系統警告] 偵測到前端連線異常中斷 (Modify API)！(Client Aborted)');
         if (child && child.pid && !child.killed) {
           console.warn(`🔪 正在強制終止孤立的 AI 子程序 (PID: ${child.pid})...`);
           try {

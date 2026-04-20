@@ -1,0 +1,23 @@
+{
+  "name": "2048-game",
+  "version": "1.0.0",
+  "description": "A full-stack 2048 game with SQLite backend",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "concurrently \"node server.js\" \"live-server public --port=8080 --no-browser\"",
+    "build": "echo 'No build step required for Node.js backend'"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "sqlite3": "^5.1.6",
+    "cors": "^2.8.5"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "live-server": "^1.2.2"
+  },
+  "keywords": ["game", "2048", "fullstack"],
+  "author": "2048 Game Team",
+  "license": "MIT"
+}
