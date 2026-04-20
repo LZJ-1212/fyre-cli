@@ -585,7 +585,6 @@ program
   .action(() => {
     const serverPath = path.join(__dirname, '../src/server.js');
 
-    // 【架構升級】改用 process.execPath 並移除 shell: true，修復 DeprecationWarning 安全漏洞
     const serverProcess = spawn(process.execPath, [serverPath], {
       stdio: 'inherit'
     });
@@ -593,7 +592,7 @@ program
     // 延遲 1.5 秒等待伺服器啟動後，自動打開使用者的預設瀏覽器
     setTimeout(() => {
       const url = 'http://localhost:8080';
-      // 【終極修復】改用 exec 執行單一字串指令，徹底消除 Node 24 的 DEP0190 陣列傳遞警告
+      // 【終極安全修復】使用 exec 徹底消除 Node 24 陣列傳遞警告
       const { exec } = require('child_process');
       if (process.platform === 'win32') {
         exec(`start "" "${url}"`);
@@ -811,8 +810,15 @@ ${errorLog}
               if (match && !browserOpened) {
                 browserOpened = true;
                 const url = match[0];
-                const openCmd = process.platform === 'win32' ? 'start' : (process.platform === 'darwin' ? 'open' : 'xdg-open');
-                spawn(openCmd, [url], { shell: true });
+                // 【終極安全修復】使用 exec 徹底消除 Node 24 陣列傳遞警告
+                const { exec } = require('child_process');
+                if (process.platform === 'win32') {
+                  exec(`start "" "${url}"`);
+                } else if (process.platform === 'darwin') {
+                  exec(`open "${url}"`);
+                } else {
+                  exec(`xdg-open "${url}"`);
+                }
 
                 console.log('\n✅ 伺服器啟動成功！即將進入對話模式...');
                 process.exit(0);

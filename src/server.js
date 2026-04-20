@@ -59,6 +59,7 @@ app.post('/api/generate', (req, res) => {
         // 稍微延遲 500 毫秒，確保最後一段日誌傳送完畢，然後強制結束 HTTP 回應
         setTimeout(() => {
           if (!res.writableEnded) {
+            clearInterval(heartbeat); // [A級規範：嚴格清除計時器，防止寫入已關閉的串流]
             res.write('\n\x1b[32m[系統提示] 專案伺服器已啟動，Web UI 準備解除鎖定！\x1b[0m\n');
             res.end(); // 這行會讓前端的 fetch() 成功 resolve，進入下一個畫面！
           }

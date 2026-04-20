@@ -2,7 +2,7 @@
   "name": "codecraft",
   "version": "1.0.0",
   "description": "Code-free development environment configuration and project generation tool for beginners",
-  "main": "bin/cli.js",
+  "main": "src/server.js",
   "bin": {
     "codecraft": "./bin/cli.js"
   },

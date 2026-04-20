@@ -25,12 +25,21 @@ async function callArchitectAgent(description, apiKey, lang = 'en') {
 
   console.log('\n👑 [架構師] 正在分析需求並繪製專案藍圖...');
 
-  const response = await axios.post('https://api.deepseek.com/v1/chat/completions', {
-    model: 'deepseek-chat',
-    messages: [{ role: 'system', content: architectPrompt }, { role: 'user', content: description }],
-    response_format: { type: 'json_object' },
-    temperature: 0.2
-  }, { headers: { Authorization: `Bearer ${apiKey}` } });
+  let response;
+  try {
+    response = await axios.post('https://api.deepseek.com/v1/chat/completions', {
+      model: 'deepseek-chat',
+      messages: [{ role: 'system', content: architectPrompt }, { role: 'user', content: description }],
+      response_format: { type: 'json_object' },
+      temperature: 0.2
+    }, {
+      headers: { Authorization: `Bearer ${apiKey}` },
+      timeout: 60000 // [A級規範：設定絕對逾時邊界，防止永久死鎖]
+    });
+  } catch (error) {
+    console.error(`\n❌ [架構師代理] API 請求發生致命錯誤: ${error.message}`);
+    throw new Error(`架構師分析失敗，請檢查網路連線或 API 金鑰額度。(${error.message})`);
+  }
 
   const content = response.data.choices[0].message.content;
   const jsonStart = content.indexOf('{');
