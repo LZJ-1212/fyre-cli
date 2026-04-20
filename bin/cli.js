@@ -8,6 +8,7 @@ const { spawn } = require('child_process');
 const axios = require('axios');
 const util = require('util');
 const exec = util.promisify(require('child_process').exec);
+const { extractCodeSkeleton, injectASTNode } = require('../src/core/ast');
 
 // ==========================================
 // 1. 全域設定與常數 (Configuration)
