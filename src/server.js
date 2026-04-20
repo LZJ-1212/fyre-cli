@@ -12,8 +12,8 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.post('/api/generate', (req, res) => {
   const { description, outputDir, apiKey, install, test, force } = req.body;
 
+  // Grade A 標準：移除手動的 chunked 宣告，交由 Node.js 底層自動管理傳輸編碼
   res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-  res.setHeader('Transfer-Encoding', 'chunked');
 
   if (!apiKey && !process.env.DEEPSEEK_API_KEY) {
     res.write('\n\x1b[31m❌ 錯誤：請輸入 DeepSeek API Key。\x1b[0m\n');
@@ -122,8 +122,8 @@ app.post('/api/generate', (req, res) => {
 app.post('/api/modify', (req, res) => {
   const { projectDir, message, apiKey, history } = req.body;
 
+  // 保持全域架構一致性，移除冗餘標頭
   res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-  res.setHeader('Transfer-Encoding', 'chunked');
 
   if (!apiKey && !process.env.DEEPSEEK_API_KEY) {
     res.write('\n\x1b[31m❌ 錯誤：請確保 API Key 有效。\x1b[0m\n');
