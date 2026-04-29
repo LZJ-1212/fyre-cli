@@ -4,262 +4,158 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Genshin Impact Wiki — Home</title>
-  <!-- Tailwind CSS via CDN (lightweight + fast) -->
+  <!-- Tailwind CSS via CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- Custom styles (overrides & theme) -->
+  <!-- Custom styles -->
   <link rel="stylesheet" href="/css/style.css">
-  <!-- Main JS utilities (fetch, render, navigation) -->
-  <script defer src="/js/main.js"></script>
-  <!-- Detail page logic not needed on index, but we keep main.js only -->
 </head>
 <body class="bg-gray-50 text-gray-800 font-sans antialiased">
 
-  <!-- ====== HEADER / NAVIGATION ====== -->
-  <header class="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-30">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-16">
-      <!-- Logo / Brand -->
-      <a href="/" class="flex items-center space-x-2 text-xl font-bold text-indigo-700 hover:text-indigo-900 transition">
-        <span class="text-2xl">🌍</span>
-        <span>Genshin Wiki</span>
-      </a>
-      <!-- Navigation links (exactly as blueprint) -->
-      <nav class="flex space-x-6 text-sm font-medium">
-        <a href="/" class="text-indigo-700 border-b-2 border-indigo-500 pb-1">Home</a>
-        <a href="/characters.html" class="text-gray-600 hover:text-indigo-700 transition">Characters</a>
-        <a href="/about.html" class="text-gray-600 hover:text-indigo-700 transition">About</a>
-      </nav>
+  <!-- ====== Navigation ====== -->
+  <nav class="bg-indigo-700 text-white shadow-lg sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-between h-16">
+        <!-- Logo / Brand -->
+        <div class="flex-shrink-0">
+          <a href="/index.html" class="text-2xl font-bold tracking-tight hover:text-indigo-200 transition">
+            ⚔️ Genshin Wiki
+          </a>
+        </div>
+        <!-- Nav links -->
+        <div class="flex space-x-6">
+          <a href="/index.html" class="nav-link px-3 py-2 rounded-md text-sm font-medium bg-indigo-500 text-white" aria-current="page">Home</a>
+          <a href="/characters.html" class="nav-link px-3 py-2 rounded-md text-sm font-medium hover:bg-indigo-500 hover:text-white transition">Characters</a>
+          <a href="/about.html" class="nav-link px-3 py-2 rounded-md text-sm font-medium hover:bg-indigo-500 hover:text-white transition">About</a>
+        </div>
+      </div>
     </div>
-  </header>
+  </nav>
 
-  <!-- ====== MAIN CONTENT ====== -->
-  <main>
-
-    <!-- ====== HERO SECTION ====== -->
-    <section class="relative bg-gradient-to-br from-indigo-50 via-white to-sky-50">
-      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 md:py-28 lg:py-32">
-        <div class="text-center md:text-left md:max-w-2xl">
-          <h1 class="text-4xl sm:text-5xl md:text-6xl font-extrabold text-gray-900 leading-tight">
-            Teyvat's<br>
-            <span class="text-indigo-600">Complete Archive</span>
-          </h1>
-          <p class="mt-6 text-lg sm:text-xl text-gray-600 leading-relaxed">
-            Explore every character, weapon, and region of Genshin Impact. 
-            From Mondstadt to Sumeru, discover lore, stats, and hidden stories — 
-            all in one living wiki.
-          </p>
-          <div class="mt-8 flex flex-col sm:flex-row gap-4 justify-center md:justify-start">
-            <a href="/characters.html" 
-               class="inline-block px-8 py-4 bg-indigo-600 text-white font-semibold rounded-xl shadow-md hover:bg-indigo-700 transition transform hover:scale-[1.02] active:scale-95">
-              Browse Characters
-            </a>
-            <a href="/about.html" 
-               class="inline-block px-8 py-4 bg-white text-indigo-700 font-semibold rounded-xl border border-indigo-200 shadow-sm hover:bg-indigo-50 transition">
-              About the Wiki
-            </a>
-          </div>
-        </div>
-        <!-- subtle decorative element -->
-        <div class="hidden lg:block absolute right-10 top-16 opacity-10 pointer-events-none">
-          <svg class="w-72 h-72 text-indigo-400" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+  <!-- ====== Hero Section ====== -->
+  <section class="relative bg-gradient-to-br from-indigo-800 via-purple-700 to-indigo-900 text-white">
+    <div class="max-w-7xl mx-auto px-4 py-20 sm:px-6 lg:px-8 flex flex-col md:flex-row items-center justify-between">
+      <div class="md:w-1/2 space-y-6">
+        <h1 class="text-4xl sm:text-5xl lg:text-6xl font-extrabold leading-tight">
+          Genshin Impact<br>
+          <span class="text-yellow-300">Complete Wiki</span>
+        </h1>
+        <p class="text-lg sm:text-xl text-indigo-100 max-w-xl">
+          Discover every character, their elements, weapons, and lore. Your ultimate guide to the world of Teyvat.
+        </p>
+        <div class="flex flex-wrap gap-4 pt-4">
+          <a href="/characters.html" class="inline-block bg-yellow-400 text-gray-900 font-semibold px-8 py-3 rounded-full shadow-lg hover:bg-yellow-300 transition transform hover:scale-105">
+            Browse Characters
+          </a>
+          <a href="/about.html" class="inline-block border-2 border-white text-white font-semibold px-8 py-3 rounded-full hover:bg-white hover:text-indigo-800 transition">
+            About This Wiki
+          </a>
         </div>
       </div>
-    </section>
-
-    <!-- ====== FEATURED CHARACTERS SECTION ====== -->
-    <section class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-      <div class="flex items-center justify-between mb-10">
-        <h2 class="text-3xl sm:text-4xl font-bold text-gray-900">⭐ Featured Characters</h2>
-        <a href="/characters.html" class="text-indigo-600 hover:text-indigo-800 font-medium text-sm sm:text-base transition">
-          View all &rarr;
-        </a>
+      <div class="md:w-1/2 mt-10 md:mt-0 flex justify-center">
+        <!-- Dynamic image via internal proxy -->
+        <img src="/api/get-image?q=genshin,impact,teyvat,landscape" 
+             alt="Genshin Impact world of Teyvat" 
+             class="rounded-2xl shadow-2xl w-full max-w-md object-cover h-64 md:h-80 border-4 border-indigo-400">
       </div>
+    </div>
+  </section>
 
-      <!-- Character cards grid (rendered by JS) -->
-      <div id="featured-characters" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-        <!-- JS will inject cards here. Fallback: static loading indicator -->
-        <div class="col-span-full flex justify-center py-12">
-          <div class="flex items-center space-x-3 text-gray-400">
-            <svg class="animate-spin h-6 w-6 text-indigo-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
-            </svg>
-            <span class="text-lg">Loading featured characters...</span>
-          </div>
-        </div>
-      </div>
-    </section>
+  <!-- ====== Featured Content Placeholder ====== -->
+  <section class="max-w-7xl mx-auto px-4 py-16 sm:px-6 lg:px-8">
+    <div class="text-center mb-12">
+      <h2 class="text-3xl font-bold text-gray-800">✨ Featured Characters</h2>
+      <p class="text-gray-500 mt-2">Handpicked highlights from the world of Teyvat</p>
+    </div>
 
-    <!-- ====== QUICK STATS / EXTRA (optional but nice) ====== -->
-    <section class="bg-white border-t border-gray-200">
-      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 grid grid-cols-1 md:grid-cols-3 gap-8 text-center">
-        <div class="p-6">
-          <div class="text-4xl font-bold text-indigo-600">7</div>
-          <div class="mt-2 text-gray-500 font-medium">Nations</div>
-        </div>
-        <div class="p-6">
-          <div class="text-4xl font-bold text-indigo-600">80+</div>
-          <div class="mt-2 text-gray-500 font-medium">Playable Characters</div>
-        </div>
-        <div class="p-6">
-          <div class="text-4xl font-bold text-indigo-600">5</div>
-          <div class="mt-2 text-gray-500 font-medium">Weapon Types</div>
-        </div>
-      </div>
-    </section>
-  </main>
+    <!-- Featured cards grid (dynamic data from backend or fallback) -->
+    <div id="featured-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
+      <!-- Cards will be injected by main.js -->
+    </div>
 
-  <!-- ====== FOOTER ====== -->
-  <footer class="bg-gray-100 border-t border-gray-200 py-8">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between text-sm text-gray-500">
-      <p class="mb-2 sm:mb-0">© 2025 Genshin Impact Wiki — fan project, not affiliated with HoYoverse.</p>
-      <div class="flex space-x-6">
-        <a href="/" class="hover:text-indigo-600 transition">Home</a>
-        <a href="/characters.html" class="hover:text-indigo-600 transition">Characters</a>
-        <a href="/about.html" class="hover:text-indigo-600 transition">About</a>
+    <!-- Loading indicator (hidden by default) -->
+    <div id="featured-loading" class="flex justify-center py-10">
+      <div class="animate-spin rounded-full h-12 w-12 border-t-4 border-indigo-600 border-opacity-75"></div>
+    </div>
+
+    <!-- Error / fallback message (hidden by default) -->
+    <div id="featured-error" class="hidden text-center py-10 text-red-500 font-medium">
+      ⚠️ Could not load featured content. Showing offline preview.
+    </div>
+  </section>
+
+  <!-- ====== Footer ====== -->
+  <footer class="bg-gray-800 text-gray-300 py-8 mt-12">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+      <p class="text-sm">© 2025 Genshin Impact Wiki — Fan project, not affiliated with HoYoverse.</p>
+      <div class="flex justify-center space-x-6 mt-4">
+        <a href="/index.html" class="hover:text-white transition">Home</a>
+        <a href="/characters.html" class="hover:text-white transition">Characters</a>
+        <a href="/about.html" class="hover:text-white transition">About</a>
       </div>
     </div>
   </footer>
 
-  <!-- ====== INLINE SCRIPT: RENDER FEATURED CHARACTERS ====== -->
+  <!-- ====== Scripts ====== -->
+  <!-- Utility functions first -->
+  <script src="/js/utils.js"></script>
+  <!-- Main application logic -->
+  <script src="/js/main.js"></script>
+
+  <!-- Inline script to ensure featured section loads even if main.js fails -->
   <script>
     (function() {
-      // ----- DEFENSIVE: try fetching from API, fallback to exact mock data -----
-      const container = document.getElementById('featured-characters');
-      if (!container) return;
-
-      // ----- EXACT MOCK DATA (high fidelity, real Genshin characters) -----
-      const MOCK_FEATURED = [
-        {
-          id: 1,
-          name: 'Jean',
-          element: 'Anemo',
-          weapon: 'Sword',
-          region: 'Mondstadt',
-          description: 'The righteous and rigorous Acting Grand Master of the Knights of Favonius.',
-          image_url: '/api/images/1'   // dynamic backend route
-        },
-        {
-          id: 2,
-          name: 'Diluc',
-          element: 'Pyro',
-          weapon: 'Claymore',
-          region: 'Mondstadt',
-          description: 'The darknight hero, owner of the Dawn Winery, and a fierce fighter.',
-          image_url: '/api/images/2'
-        },
-        {
-          id: 3,
-          name: 'Zhongli',
-          element: 'Geo',
-          weapon: 'Polearm',
-          region: 'Liyue',
-          description: 'The consultant of the Wangsheng Funeral Parlor, also the Geo Archon.',
-          image_url: '/api/images/3'
-        },
-        {
-          id: 4,
-          name: 'Raiden Shogun',
-          element: 'Electro',
-          weapon: 'Polearm',
-          region: 'Inazuma',
-          description: 'The Eternity-seeking ruler of Inazuma, wielder of the Musou no Hitotachi.',
-          image_url: '/api/images/4'
-        },
-        {
-          id: 5,
-          name: 'Ganyu',
-          element: 'Cryo',
-          weapon: 'Bow',
-          region: 'Liyue',
-          description: 'The half-qilin secretary of the Liyue Qixing, gentle and precise.',
-          image_url: '/api/images/5'
-        },
-        {
-          id: 6,
-          name: 'Hu Tao',
-          element: 'Pyro',
-          weapon: 'Polearm',
-          region: 'Liyue',
-          description: 'The 77th Director of the Wangsheng Funeral Parlor, full of mischief.',
-          image_url: '/api/images/6'
+      // Defensive fallback: if main.js doesn't render featured cards within 3 seconds, use mock data
+      let fallbackTimer = setTimeout(function() {
+        const grid = document.getElementById('featured-grid');
+        const loading = document.getElementById('featured-loading');
+        const error = document.getElementById('featured-error');
+        if (grid && grid.children.length === 0) {
+          // Show error message
+          if (error) error.classList.remove('hidden');
+          if (loading) loading.classList.add('hidden');
+          // Inject mock featured data (exact Genshin characters)
+          const mockFeatured = [
+            { name: 'Traveler (Anemo)', element: 'Anemo', weapon: 'Sword', image: '/api/get-image?q=genshin,traveler,anemo' },
+            { name: 'Amber', element: 'Pyro', weapon: 'Bow', image: '/api/get-image?q=genshin,amber,pyro' },
+            { name: 'Kaeya', element: 'Cryo', weapon: 'Sword', image: '/api/get-image?q=genshin,kaeya,cryo' },
+            { name: 'Lisa', element: 'Electro', weapon: 'Catalyst', image: '/api/get-image?q=genshin,lisa,electro' },
+            { name: 'Jean', element: 'Anemo', weapon: 'Sword', image: '/api/get-image?q=genshin,jean,anemo' },
+            { name: 'Diluc', element: 'Pyro', weapon: 'Claymore', image: '/api/get-image?q=genshin,diluc,pyro' }
+          ];
+          grid.innerHTML = '';
+          mockFeatured.forEach(char => {
+            const card = document.createElement('div');
+            card.className = 'bg-white rounded-xl shadow-lg overflow-hidden transform hover:scale-105 transition duration-300';
+            card.innerHTML = `
+              <img src="${char.image}" alt="${char.name}" class="w-full h-48 object-cover" loading="lazy">
+              <div class="p-5">
+                <h3 class="text-xl font-bold text-gray-800">${char.name}</h3>
+                <div class="flex items-center justify-between mt-2">
+                  <span class="inline-block bg-indigo-100 text-indigo-800 text-sm px-3 py-1 rounded-full">${char.element}</span>
+                  <span class="text-gray-500 text-sm">${char.weapon}</span>
+                </div>
+              </div>
+            `;
+            grid.appendChild(card);
+          });
         }
-      ];
+      }, 3000); // 3 seconds fallback
 
-      // ----- RENDER FUNCTION (creates card HTML) -----
-      function renderCharacterCard(character) {
-        const card = document.createElement('a');
-        card.href = `/detail.html?id=${character.id}`;
-        card.className = 'block bg-white rounded-2xl shadow-md hover:shadow-xl transition-shadow duration-300 overflow-hidden border border-gray-100 group';
-
-        // image container with fallback gradient if image fails
-        const imgDiv = document.createElement('div');
-        imgDiv.className = 'relative h-48 bg-gradient-to-br from-indigo-100 to-purple-100 flex items-center justify-center overflow-hidden';
-        
-        const img = document.createElement('img');
-        img.className = 'w-full h-full object-cover group-hover:scale-105 transition-transform duration-300';
-        img.alt = character.name;
-        img.loading = 'lazy';
-        // Use the backend image route (real endpoint)
-        img.src = character.image_url || `/api/images/${character.id}`;
-        // if image fails, show a colored placeholder with initial
-        img.onerror = function() {
-          this.style.display = 'none';
-          const fallback = document.createElement('div');
-          fallback.className = 'absolute inset-0 flex items-center justify-center text-5xl font-bold text-indigo-300';
-          fallback.textContent = character.name.charAt(0);
-          imgDiv.appendChild(fallback);
-        };
-        imgDiv.appendChild(img);
-
-        // info section
-        const infoDiv = document.createElement('div');
-        infoDiv.className = 'p-5';
-        infoDiv.innerHTML = `
-          <h3 class="text-xl font-bold text-gray-800 group-hover:text-indigo-700 transition-colors">${character.name}</h3>
-          <div class="mt-2 flex flex-wrap gap-2 text-xs font-medium">
-            <span class="px-3 py-1 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100">${character.element}</span>
-            <span class="px-3 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-100">${character.weapon}</span>
-            <span class="px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100">${character.region}</span>
-          </div>
-          <p class="mt-3 text-sm text-gray-500 line-clamp-2">${character.description || ''}</p>
-        `;
-
-        card.appendChild(imgDiv);
-        card.appendChild(infoDiv);
-        return card;
-      }
-
-      // ----- FETCH FROM API WITH FALLBACK -----
-      async function loadFeatured() {
-        try {
-          const response = await fetch('/api/characters?limit=6');
-          if (!response.ok) throw new Error('API response not ok');
-          const data = await response.json();
-          // if API returns array, use it; else fallback
-          if (Array.isArray(data) && data.length > 0) {
-            renderCharacters(data.slice(0, 6));
-          } else {
-            throw new Error('Empty or invalid data');
+      // If main.js successfully loads, clear the fallback timer
+      window.addEventListener('load', function() {
+        // main.js will set a flag or we can detect by checking grid children after a short delay
+        setTimeout(function() {
+          const grid = document.getElementById('featured-grid');
+          if (grid && grid.children.length > 0) {
+            clearTimeout(fallbackTimer);
+            const loading = document.getElementById('featured-loading');
+            const error = document.getElementById('featured-error');
+            if (loading) loading.classList.add('hidden');
+            if (error) error.classList.add('hidden');
           }
-        } catch (err) {
-          console.warn('API fetch failed, using mock data:', err.message);
-          renderCharacters(MOCK_FEATURED);
-        }
-      }
-
-      function renderCharacters(characters) {
-        container.innerHTML = ''; // clear loading
-        characters.forEach(char => {
-          container.appendChild(renderCharacterCard(char));
-        });
-      }
-
-      // start loading
-      loadFeatured();
+        }, 500);
+      });
     })();
   </script>
-
-  <!-- ensure main.js is loaded (already deferred) but we also call any global init if needed -->
-  <!-- main.js provides fetchCharacter, fetchCharacters, renderCharacterCard (but we use local for safety) -->
 </body>
 </html>

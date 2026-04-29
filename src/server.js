@@ -39,6 +39,19 @@ function hijackStream(res) {
   };
 }
 
+// --- [實機演示核心：圖片自動獲取邏輯] ---
+app.get('/api/get-image', (req, res) => {
+    const { q } = req.query;
+    // 如果 AI 沒給關鍵字，就給一張隨機風景圖
+    if (!q) return res.redirect('https://picsum.photos/800/600');
+
+    // 關鍵：將 AI 生成的關鍵字轉發給 LoremFlickr (目前最穩定的免費圖庫)
+    const targetUrl = `https://loremflickr.com/800/600/${encodeURIComponent(q)}`;
+    
+    console.log(`\n🖼️ [Asset Discovery] Redirecting request for [${q}] to real asset...`);
+    res.redirect(targetUrl);
+});
+
 // 🌐 API 1: 啟動多代理協作生成專案 
 app.post('/api/generate', async (req, res) => {
   const { description, outputDir, apiKey, lang } = req.body;

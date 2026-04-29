@@ -49,7 +49,9 @@ class AIService {
 
         const architectPrompt = `You are an elite Enterprise Software Architect. Design a PRODUCTION-READY, Deployment-Grade Full-Stack architecture based on the user's description.
 CRITICAL Requirements to maximize token usage and quality:
-1. REAL IMAGES CAPABILITY (NO PLACEHOLDERS): You MUST design a Backend API route (e.g., /api/images) that fetches real images from public APIs. The frontend MUST use this to render REAL images.
+CRITICAL Requirements to maximize token usage and quality:
+1. REAL IMAGES CAPABILITY: You MUST include a backend route \`backend/routes/images.js\` and link it to \`server.js\` as \`/api/get-image\`. 
+   - This route MUST handle keyword-based image redirection using LoremFlickr (https://loremflickr.com/800/600/{q}).
 2. MULTI-PAGE REQUIREMENT: DO NOT build a single-page application (SPA) unless specifically asked. You MUST design a multi-page structure (e.g., index.html, detail.html, about.html) with proper navigation links between them.
 3. FRONTEND SIMPLICITY: You MUST use Vanilla HTML/JS/CSS for the frontend. Place frontend files directly in 'public/'.
 4. DATABASE MANDATORY: You MUST design a persistent data layer using Node.js + Express + standard 'sqlite3' (NO 'better-sqlite3'). Include init scripts and Model/Controller files.
@@ -179,9 +181,14 @@ CRITICAL Requirements to maximize token usage and quality:
 
             let finalStartCmd = startCommand;
             if (startCommand === 'node server.js') {
-                if (await fs.pathExists(path.join(targetDir, 'server/index.js'))) finalStartCmd = 'node server/index.js';
-                else if (await fs.pathExists(path.join(targetDir, 'server.js'))) finalStartCmd = 'node server.js';
-                else if (await fs.pathExists(path.join(targetDir, 'index.js'))) finalStartCmd = 'node index.js';
+                // 增加對 backend/ 資料夾的檢查
+                if (await fs.pathExists(path.join(targetDir, 'backend/server.js'))) {
+                    finalStartCmd = 'node backend/server.js';
+                } else if (await fs.pathExists(path.join(targetDir, 'server/index.js'))) {
+                    finalStartCmd = 'node server/index.js';
+                } else if (await fs.pathExists(path.join(targetDir, 'server.js'))) {
+                    finalStartCmd = 'node server.js';
+                }
             }
 
             const batPath = path.join(targetDir, 'Start_Project.bat');
@@ -268,7 +275,12 @@ CRITICAL RULES FOR "ZERO-KNOWLEDGE" USER SUCCESS:
 6. STRICT ALIGNMENT: Read the [CRITICAL MEMORY] section below. Do NOT hallucinate function names.
 7. EXHAUST YOUR TOKENS: Output the full file. Do not omit any logic.
 8. NO Markdown tags. Pure code ONLY.
-9. ${getLangInstruction(lang)}
+9. DYNAMIC REAL-ASSET INJECTION:
+   - For ANY <img> tags, you MUST NOT use placeholders or fake local paths.
+   - You MUST use the system's internal proxy: /api/get-image?q={keywords}
+   - Example for Genshin: <img src="/api/get-image?q=genshin,raiden,shogun" alt="Raiden Shogun">
+   - Example for Portfolio: <img src="/api/get-image?q=professional,developer,portrait" alt="Profile">
+10. ${getLangInstruction(lang)}
 ${formattedMemoryPrompt}`;
 
         const response = await axios.post('https://api.deepseek.com/v1/chat/completions', {
@@ -282,10 +294,20 @@ ${formattedMemoryPrompt}`;
     }
 
     /**
-     * 階段 4：QA 審查與修復 (Chain-of-Thought 思維鏈除錯)
-     */
+         * 階段 4：QA 審查與修復 (Chain-of-Thought 思維鏈除錯)
+         */
     static async applyQAPatch(projectDir, message, apiKey) {
         console.log(`🧠 [QA Agent] Analyzing AST and formulating Chain-of-Thought reasoning...`);
+
+        // 👇 [新增的自動備份機制 - Agent Rollback System]
+        const backupDir = `${projectDir}_backup_${Date.now()}`;
+        try {
+            await fs.copy(projectDir, backupDir);
+            console.log(`🛡️ [System] Created safety snapshot at: ${path.basename(backupDir)}`);
+        } catch (e) {
+            console.log(`⚠️ [System] Backup failed, proceeding carefully...`);
+        }
+        // 👆 ---------------------------------------------------
 
         const filesMap = await FileService.readProjectFiles(projectDir);
         const existingContext = JSON.stringify(filesMap);
@@ -322,8 +344,10 @@ NO markdown code blocks inside the <patch> tag.
 
         const patchMatch = content.match(/<patch>([\s\S]*?)<\/patch>/i);
         if (!patchMatch) {
-            throw new Error("AI completely failed to generate the <patch> tag.");
+            throw new Error("AI completely failed to generate the <patch> tag. (You can safely restore from the backup folder).");
         }
+
+        // ... 後面的 JSON 解析與 FileService.applyPatch 邏輯保持不變 ...
 
         let jsonStr = patchMatch[1].trim();
         jsonStr = jsonStr.replace(/^```[a-z]*\s*/i, '').replace(/\s*```$/i, '').trim();

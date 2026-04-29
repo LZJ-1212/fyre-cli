@@ -1,428 +1,296 @@
-// Main JavaScript file with utility functions for fetching data from the backend API,
-// handling navigation, and rendering dynamic content for the Genshin Impact Wiki.
+// Main JavaScript file for Genshin Impact Wiki
+// Handles navigation highlighting, fetches character data from backend API,
+// and renders character cards on characters.html
 
-// =============================================================================
-// Mock Data (Fallback when API is unavailable)
-// =============================================================================
+// Utility function to get image URL from LoremFlickr
+function getCharacterImageUrl(keyword) {
+  return `/api/get-image?q=genshin,${keyword},character`;
+}
+
+// Mock data fallback in case API fails
 const MOCK_CHARACTERS = [
   {
     id: 1,
-    name: "Traveler (Anemo)",
-    element: "Anemo",
-    weapon: "Sword",
-    region: "Mondstadt",
-    description: "A traveler from another world who has the ability to resonate with the elements. Their Anemo form allows them to control wind and create powerful gusts.",
-    image_url: "https://api.genshin.dev/characters/traveler-anemo/icon"
+    name: 'Traveler',
+    element: 'Anemo',
+    weapon: 'Sword',
+    region: 'Mondstadt',
+    description: 'A traveler from another world who has the power to resonate with the elements.',
+    image_url: getCharacterImageUrl('traveler,anemo')
   },
   {
     id: 2,
-    name: "Amber",
-    element: "Pyro",
-    weapon: "Bow",
-    region: "Mondstadt",
-    description: "The only remaining Outrider of the Knights of Favonius. She is always ready to help those in need and is an expert in gliding.",
-    image_url: "https://api.genshin.dev/characters/amber/icon"
+    name: 'Amber',
+    element: 'Pyro',
+    weapon: 'Bow',
+    region: 'Mondstadt',
+    description: 'The only remaining Outrider of the Knights of Favonius. She is always ready to help those in need.',
+    image_url: getCharacterImageUrl('amber,pyro')
   },
   {
     id: 3,
-    name: "Kaeya",
-    element: "Cryo",
-    weapon: "Sword",
-    region: "Mondstadt",
-    description: "The Cavalry Captain of the Knights of Favonius. He is known for his mysterious demeanor and strategic mind.",
-    image_url: "https://api.genshin.dev/characters/kaeya/icon"
+    name: 'Kaeya',
+    element: 'Cryo',
+    weapon: 'Sword',
+    region: 'Mondstadt',
+    description: 'The Cavalry Captain of the Knights of Favonius. He is mysterious and cunning.',
+    image_url: getCharacterImageUrl('kaeya,cryo')
   },
   {
     id: 4,
-    name: "Lisa",
-    element: "Electro",
-    weapon: "Catalyst",
-    region: "Mondstadt",
-    description: "The librarian of the Knights of Favonius. She is a powerful mage who prefers to take things easy.",
-    image_url: "https://api.genshin.dev/characters/lisa/icon"
+    name: 'Lisa',
+    element: 'Electro',
+    weapon: 'Catalyst',
+    region: 'Mondstadt',
+    description: 'The librarian of the Knights of Favonius. She is knowledgeable and powerful.',
+    image_url: getCharacterImageUrl('lisa,electro')
   },
   {
     id: 5,
-    name: "Xiangling",
-    element: "Pyro",
-    weapon: "Polearm",
-    region: "Liyue",
-    description: "The Head Chef of the Wanmin Restaurant. She is passionate about cooking and always looking for new ingredients.",
-    image_url: "https://api.genshin.dev/characters/xiangling/icon"
+    name: 'Jean',
+    element: 'Anemo',
+    weapon: 'Sword',
+    region: 'Mondstadt',
+    description: 'The Acting Grand Master of the Knights of Favonius. She is dedicated to protecting Mondstadt.',
+    image_url: getCharacterImageUrl('jean,anemo')
   },
   {
     id: 6,
-    name: "Beidou",
-    element: "Electro",
-    weapon: "Claymore",
-    region: "Liyue",
-    description: "The captain of the Crux Fleet. She is a fearless warrior who commands respect on the high seas.",
-    image_url: "https://api.genshin.dev/characters/beidou/icon"
+    name: 'Diluc',
+    element: 'Pyro',
+    weapon: 'Claymore',
+    region: 'Mondstadt',
+    description: 'The wealthy owner of the Dawn Winery. He fights against the Abyss Order in secret.',
+    image_url: getCharacterImageUrl('diluc,pyro')
   },
   {
     id: 7,
-    name: "Xingqiu",
-    element: "Hydro",
-    weapon: "Sword",
-    region: "Liyue",
-    description: "A young man from the Feiyun Commerce Guild. He is a skilled swordsman and a lover of literature.",
-    image_url: "https://api.genshin.dev/characters/xingqiu/icon"
+    name: 'Venti',
+    element: 'Anemo',
+    weapon: 'Bow',
+    region: 'Mondstadt',
+    description: 'The bard of Mondstadt who is actually the Anemo Archon, Barbatos.',
+    image_url: getCharacterImageUrl('venti,anemo')
   },
   {
     id: 8,
-    name: "Fischl",
-    element: "Electro",
-    weapon: "Bow",
-    region: "Mondstadt",
-    description: "A mysterious girl who calls herself the 'Prinzessin der Verurteilung'. She travels with her familiar, Oz.",
-    image_url: "https://api.genshin.dev/characters/fischl/icon"
+    name: 'Zhongli',
+    element: 'Geo',
+    weapon: 'Polearm',
+    region: 'Liyue',
+    description: 'The consultant of the Wangsheng Funeral Parlor who is actually the Geo Archon, Morax.',
+    image_url: getCharacterImageUrl('zhongli,geo')
   },
   {
     id: 9,
-    name: "Bennett",
-    element: "Pyro",
-    weapon: "Sword",
-    region: "Mondstadt",
-    description: "The leader of Bennett's Adventure Team. Despite his terrible luck, he remains optimistic and brave.",
-    image_url: "https://api.genshin.dev/characters/bennett/icon"
+    name: 'Raiden Shogun',
+    element: 'Electro',
+    weapon: 'Polearm',
+    region: 'Inazuma',
+    description: 'The Electro Archon who rules over Inazuma with an iron fist.',
+    image_url: getCharacterImageUrl('raiden,shogun,electro')
   },
   {
     id: 10,
-    name: "Noelle",
-    element: "Geo",
-    weapon: "Claymore",
-    region: "Mondstadt",
-    description: "A maid in the service of the Knights of Favonius. She dreams of becoming a knight and works tirelessly to achieve her goal.",
-    image_url: "https://api.genshin.dev/characters/noelle/icon"
-  },
-  {
-    id: 11,
-    name: "Chongyun",
-    element: "Cryo",
-    weapon: "Claymore",
-    region: "Liyue",
-    description: "An exorcist from a family of exorcists. He has a pure yang constitution that makes him naturally resistant to evil spirits.",
-    image_url: "https://api.genshin.dev/characters/chongyun/icon"
-  },
-  {
-    id: 12,
-    name: "Sucrose",
-    element: "Anemo",
-    weapon: "Catalyst",
-    region: "Mondstadt",
-    description: "An alchemist who specializes in bio-alchemy. She is shy but incredibly talented in her field.",
-    image_url: "https://api.genshin.dev/characters/sucrose/icon"
+    name: 'Ganyu',
+    element: 'Cryo',
+    weapon: 'Bow',
+    region: 'Liyue',
+    description: 'A half-qilin Adeptus who works as a secretary at the Liyue Qixing.',
+    image_url: getCharacterImageUrl('ganyu,cryo')
   }
 ];
 
-// =============================================================================
-// Utility Functions
-// =============================================================================
-
-/**
- * Fetches all characters from the backend API.
- * Falls back to mock data if the API is unavailable.
- * @returns {Promise<Array>} Array of character objects
- */
-async function fetchCharacters() {
-  try {
-    const response = await fetch('/api/characters');
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    const data = await response.json();
-    return data;
-  } catch (error) {
-    console.warn('API unavailable, using mock data:', error.message);
-    return MOCK_CHARACTERS;
-  }
-}
-
-/**
- * Fetches a single character by ID from the backend API.
- * Falls back to mock data if the API is unavailable.
- * @param {number|string} id - Character ID
- * @returns {Promise<Object|null>} Character object or null if not found
- */
-async function fetchCharacter(id) {
-  try {
-    const response = await fetch(`/api/characters/${id}`);
-    if (!response.ok) {
-      if (response.status === 404) {
-        return null;
-      }
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    const data = await response.json();
-    return data;
-  } catch (error) {
-    console.warn('API unavailable, searching mock data:', error.message);
-    const character = MOCK_CHARACTERS.find(c => c.id === parseInt(id));
-    return character || null;
-  }
-}
-
-/**
- * Searches characters by query string from the backend API.
- * Falls back to mock data filtering if the API is unavailable.
- * @param {string} query - Search query
- * @returns {Promise<Array>} Array of matching character objects
- */
-async function searchCharacters(query) {
-  try {
-    const response = await fetch(`/api/characters/search?q=${encodeURIComponent(query)}`);
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    const data = await response.json();
-    return data;
-  } catch (error) {
-    console.warn('API unavailable, filtering mock data:', error.message);
-    const lowerQuery = query.toLowerCase();
-    return MOCK_CHARACTERS.filter(character => {
-      return (
-        character.name.toLowerCase().includes(lowerQuery) ||
-        character.element.toLowerCase().includes(lowerQuery) ||
-        character.weapon.toLowerCase().includes(lowerQuery) ||
-        character.region.toLowerCase().includes(lowerQuery) ||
-        character.description.toLowerCase().includes(lowerQuery)
-      );
-    });
-  }
-}
-
-/**
- * Returns the CSS class for a given element type.
- * @param {string} element - Element type (e.g., 'Pyro', 'Hydro')
- * @returns {string} CSS class name
- */
-function getElementColor(element) {
-  const elementColors = {
-    'Pyro': 'bg-red-500',
-    'Hydro': 'bg-blue-500',
-    'Anemo': 'bg-green-500',
-    'Electro': 'bg-purple-500',
-    'Dendro': 'bg-emerald-500',
-    'Cryo': 'bg-cyan-500',
-    'Geo': 'bg-yellow-500'
-  };
-  return elementColors[element] || 'bg-gray-500';
-}
-
-/**
- * Renders a single character card as an HTML element.
- * @param {Object} character - Character object
- * @returns {HTMLElement} Character card element
- */
-function renderCharacterCard(character) {
-  const card = document.createElement('div');
-  card.className = 'character-card bg-white rounded-lg shadow-md overflow-hidden transition-transform duration-300 hover:scale-105 cursor-pointer';
-  card.dataset.characterId = character.id;
-  
-  const elementColor = getElementColor(character.element);
-  
-  card.innerHTML = `
-    <div class="relative">
-      <img src="${character.image_url || 'https://via.placeholder.com/300x200?text=No+Image'}" 
-           alt="${character.name}" 
-           class="w-full h-48 object-cover"
-           onerror="this.src='https://via.placeholder.com/300x200?text=Image+Not+Available'">
-      <span class="absolute top-2 right-2 ${elementColor} text-white px-2 py-1 rounded-full text-xs font-semibold">
-        ${character.element}
-      </span>
-    </div>
-    <div class="p-4">
-      <h3 class="text-lg font-bold text-gray-800 mb-2">${character.name}</h3>
-      <div class="space-y-1 text-sm text-gray-600">
-        <p><span class="font-semibold">Weapon:</span> ${character.weapon}</p>
-        <p><span class="font-semibold">Region:</span> ${character.region}</p>
-      </div>
-      <p class="mt-2 text-sm text-gray-500 line-clamp-2">${character.description}</p>
-    </div>
-  `;
-  
-  // Add click event to navigate to detail page
-  card.addEventListener('click', () => {
-    window.location.href = `/detail.html?id=${character.id}`;
-  });
-  
-  return card;
-}
-
-/**
- * Renders an array of characters into a container element.
- * @param {Array} characters - Array of character objects
- * @param {HTMLElement} container - Container element to render into
- */
-function renderCharacters(characters, container) {
-  if (!container) {
-    console.error('Container element not found');
-    return;
-  }
-  
-  // Clear existing content
-  container.innerHTML = '';
-  
-  if (!characters || characters.length === 0) {
-    container.innerHTML = `
-      <div class="col-span-full text-center py-12">
-        <p class="text-gray-500 text-lg">No characters found.</p>
-      </div>
-    `;
-    return;
-  }
-  
-  // Create a document fragment for better performance
-  const fragment = document.createDocumentFragment();
-  
-  characters.forEach(character => {
-    const card = renderCharacterCard(character);
-    fragment.appendChild(card);
-  });
-  
-  container.appendChild(fragment);
-}
-
-/**
- * Initializes navigation highlighting based on current page.
- */
-function initNavigation() {
+// Function to highlight current page in navigation
+function highlightCurrentPage() {
   const currentPage = window.location.pathname.split('/').pop() || 'index.html';
   const navLinks = document.querySelectorAll('nav a');
   
   navLinks.forEach(link => {
-    const linkPage = link.getAttribute('href');
-    if (linkPage === currentPage) {
-      link.classList.add('text-blue-600', 'font-semibold');
-      link.classList.remove('text-gray-600', 'hover:text-blue-600');
+    const linkHref = link.getAttribute('href');
+    if (linkHref === currentPage) {
+      link.classList.add('text-yellow-400', 'font-bold', 'border-b-2', 'border-yellow-400');
+    } else {
+      link.classList.remove('text-yellow-400', 'font-bold', 'border-b-2', 'border-yellow-400');
     }
   });
 }
 
-/**
- * Initializes search functionality if search input exists.
- */
-function initSearch() {
-  const searchInput = document.getElementById('search-input');
-  const searchButton = document.getElementById('search-button');
-  const charactersContainer = document.getElementById('characters-container');
-  
-  if (!searchInput || !searchButton || !charactersContainer) {
-    return; // Search elements not found on this page
-  }
-  
-  async function performSearch() {
-    const query = searchInput.value.trim();
-    if (!query) {
-      // If search is empty, load all characters
-      const characters = await fetchCharacters();
-      renderCharacters(characters, charactersContainer);
-      return;
-    }
-    
-    // Show loading state
-    charactersContainer.innerHTML = `
-      <div class="col-span-full text-center py-12">
-        <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-        <p class="mt-4 text-gray-500">Searching...</p>
-      </div>
-    `;
-    
-    const results = await searchCharacters(query);
-    renderCharacters(results, charactersContainer);
-  }
-  
-  // Search on button click
-  searchButton.addEventListener('click', performSearch);
-  
-  // Search on Enter key press
-  searchInput.addEventListener('keypress', (event) => {
-    if (event.key === 'Enter') {
-      event.preventDefault();
-      performSearch();
-    }
-  });
-  
-  // Debounced search as user types (optional)
-  let debounceTimer;
-  searchInput.addEventListener('input', () => {
-    clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(performSearch, 300);
-  });
-}
-
-/**
- * Initializes the featured characters section on the homepage.
- */
-async function initFeaturedCharacters() {
-  const featuredContainer = document.getElementById('featured-characters');
-  if (!featuredContainer) {
-    return; // Not on homepage
-  }
-  
+// Function to fetch characters from API with fallback to mock data
+async function fetchCharacters(element = null) {
   try {
-    const characters = await fetchCharacters();
-    // Show first 4 characters as featured
-    const featured = characters.slice(0, 4);
-    renderCharacters(featured, featuredContainer);
+    let url = '/api/characters';
+    if (element) {
+      url += `?element=${encodeURIComponent(element)}`;
+    }
+    
+    const response = await fetch(url);
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    const characters = await response.json();
+    return characters;
   } catch (error) {
-    console.error('Failed to load featured characters:', error);
-    featuredContainer.innerHTML = `
-      <div class="col-span-full text-center py-12">
-        <p class="text-red-500">Failed to load featured characters. Please try again later.</p>
-      </div>
-    `;
+    console.warn('API fetch failed, using mock data:', error.message);
+    
+    // Filter mock data if element filter is applied
+    if (element) {
+      return MOCK_CHARACTERS.filter(char => 
+        char.element.toLowerCase() === element.toLowerCase()
+      );
+    }
+    return MOCK_CHARACTERS;
   }
 }
 
-/**
- * Initializes the characters gallery on the characters page.
- */
-async function initCharactersGallery() {
-  const galleryContainer = document.getElementById('characters-container');
-  if (!galleryContainer) {
-    return; // Not on characters page
+// Function to render character cards
+function renderCharacters(characters) {
+  const container = document.getElementById('character-grid');
+  if (!container) return;
+  
+  if (!characters || characters.length === 0) {
+    container.innerHTML = `
+      <div class="col-span-full text-center py-12">
+        <p class="text-gray-400 text-xl">No characters found matching your filter.</p>
+        <button onclick="resetFilter()" class="mt-4 px-6 py-2 bg-yellow-500 text-gray-900 rounded-lg hover:bg-yellow-400 transition-colors">
+          Reset Filter
+        </button>
+      </div>
+    `;
+    return;
   }
   
-  // Show loading state
-  galleryContainer.innerHTML = `
-    <div class="col-span-full text-center py-12">
-      <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-      <p class="mt-4 text-gray-500">Loading characters...</p>
+  container.innerHTML = characters.map(character => `
+    <div class="character-card bg-gray-800 rounded-xl overflow-hidden shadow-lg hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-2">
+      <div class="relative h-64 overflow-hidden">
+        <img 
+          src="${character.image_url || getCharacterImageUrl(character.name.toLowerCase().replace(/\s+/g, ','))}" 
+          alt="${character.name}" 
+          class="w-full h-full object-cover"
+          onerror="this.onerror=null; this.src='https://via.placeholder.com/800x600/1a1a2e/e94560?text=${encodeURIComponent(character.name)}'"
+        >
+        <div class="absolute top-2 right-2">
+          <span class="element-badge px-3 py-1 rounded-full text-sm font-semibold bg-gray-900/80 text-white">
+            ${character.element}
+          </span>
+        </div>
+      </div>
+      <div class="p-5">
+        <h3 class="text-xl font-bold text-white mb-2">${character.name}</h3>
+        <div class="flex items-center gap-2 mb-3">
+          <span class="text-sm text-gray-400">${character.weapon}</span>
+          <span class="text-gray-600">|</span>
+          <span class="text-sm text-gray-400">${character.region || 'Unknown'}</span>
+        </div>
+        <p class="text-gray-400 text-sm leading-relaxed">${character.description || 'No description available.'}</p>
+      </div>
     </div>
-  `;
+  `).join('');
+}
+
+// Function to filter characters by element
+function filterCharacters(element) {
+  const filterButtons = document.querySelectorAll('.filter-btn');
+  filterButtons.forEach(btn => {
+    btn.classList.remove('bg-yellow-500', 'text-gray-900');
+    btn.classList.add('bg-gray-700', 'text-gray-300');
+  });
   
-  try {
-    const characters = await fetchCharacters();
-    renderCharacters(characters, galleryContainer);
-  } catch (error) {
-    console.error('Failed to load characters:', error);
-    galleryContainer.innerHTML = `
-      <div class="col-span-full text-center py-12">
-        <p class="text-red-500">Failed to load characters. Please try again later.</p>
-      </div>
-    `;
+  if (element) {
+    const activeButton = document.querySelector(`[data-element="${element}"]`);
+    if (activeButton) {
+      activeButton.classList.remove('bg-gray-700', 'text-gray-300');
+      activeButton.classList.add('bg-yellow-500', 'text-gray-900');
+    }
   }
+  
+  fetchCharacters(element).then(characters => {
+    renderCharacters(characters);
+  });
 }
 
-// =============================================================================
-// Initialize on DOM Content Loaded
-// =============================================================================
-document.addEventListener('DOMContentLoaded', () => {
-  initNavigation();
-  initSearch();
-  initFeaturedCharacters();
-  initCharactersGallery();
-});
-
-// Export functions for use in other scripts (if needed)
-if (typeof module !== 'undefined' && module.exports) {
-  module.exports = {
-    fetchCharacters,
-    fetchCharacter,
-    searchCharacters,
-    getElementColor,
-    renderCharacterCard,
-    renderCharacters
-  };
+// Function to apply filter from button click
+function applyFilter(element) {
+  filterCharacters(element);
 }
+
+// Function to reset filter
+function resetFilter() {
+  const filterButtons = document.querySelectorAll('.filter-btn');
+  filterButtons.forEach(btn => {
+    btn.classList.remove('bg-yellow-500', 'text-gray-900');
+    btn.classList.add('bg-gray-700', 'text-gray-300');
+  });
+  
+  // Activate "All" button
+  const allButton = document.querySelector('[data-element="all"]');
+  if (allButton) {
+    allButton.classList.remove('bg-gray-700', 'text-gray-300');
+    allButton.classList.add('bg-yellow-500', 'text-gray-900');
+  }
+  
+  fetchCharacters().then(characters => {
+    renderCharacters(characters);
+  });
+}
+
+// Function to setup filter buttons
+function setupFilterButtons() {
+  const filterButtons = document.querySelectorAll('.filter-btn');
+  
+  filterButtons.forEach(button => {
+    button.addEventListener('click', function() {
+      const element = this.getAttribute('data-element');
+      if (element === 'all') {
+        resetFilter();
+      } else {
+        applyFilter(element);
+      }
+    });
+  });
+}
+
+// Function to initialize the page
+function init() {
+  // Highlight current page in navigation
+  highlightCurrentPage();
+  
+  // Setup filter buttons if on characters page
+  if (document.getElementById('character-grid')) {
+    setupFilterButtons();
+    
+    // Fetch and render all characters on load
+    fetchCharacters().then(characters => {
+      renderCharacters(characters);
+    });
+  }
+  
+  // Add smooth scroll behavior
+  document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+    anchor.addEventListener('click', function(e) {
+      e.preventDefault();
+      const target = document.querySelector(this.getAttribute('href'));
+      if (target) {
+        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    });
+  });
+}
+
+// Initialize when DOM is ready
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', init);
+} else {
+  init();
+}
+
+// Export functions for use in other scripts if needed
+window.getCharacterImageUrl = getCharacterImageUrl;
+window.renderCharacters = renderCharacters;
+window.filterCharacters = filterCharacters;
+window.applyFilter = applyFilter;
+window.resetFilter = resetFilter;
+window.setupFilterButtons = setupFilterButtons;
+window.init = init;
