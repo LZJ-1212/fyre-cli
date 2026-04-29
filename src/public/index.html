@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CodeCraft - Agentic Workflow IDE</title>
+    <title>CodeCraft - AI Software Architect</title>
     <style>
         :root {
             --bg: #0f172a;
@@ -33,7 +33,6 @@
             color: #cbd5e1;
         }
 
-        /* 左側：控制面板 */
         .control-panel {
             flex: 1;
             background: var(--panel);
@@ -67,6 +66,12 @@
             font-family: inherit;
         }
 
+        input::placeholder,
+        textarea::placeholder {
+            color: #64748b;
+            font-style: italic;
+        }
+
         textarea {
             resize: vertical;
             min-height: 100px;
@@ -74,17 +79,28 @@
 
         .checkbox-group {
             display: flex;
-            gap: 15px;
-            flex-wrap: wrap;
+            flex-direction: column;
+            gap: 10px;
+            background: #0f172a;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #334155;
         }
 
         .checkbox-label {
             display: flex;
             align-items: center;
-            gap: 5px;
+            gap: 8px;
             cursor: pointer;
             color: #cbd5e1;
-            font-weight: normal;
+            font-size: 0.9rem;
+        }
+
+        .checkbox-subtext {
+            font-size: 0.75rem;
+            color: #64748b;
+            margin-left: 28px;
+            margin-top: -5px;
         }
 
         button {
@@ -104,10 +120,15 @@
 
         button:disabled {
             background: #475569;
+            color: #94a3b8;
             cursor: not-allowed;
         }
 
-        /* 右側：實時終端與對話區 */
+        .btn-secondary {
+            background: #475569;
+            padding: 10px;
+        }
+
         .workspace {
             flex: 2;
             display: flex;
@@ -135,6 +156,13 @@
             border-radius: 12px;
             display: flex;
             gap: 10px;
+            align-items: center;
+            border: 2px dashed #334155;
+            transition: 0.3s;
+        }
+
+        .chat-box.unlocked {
+            border-color: #8b5cf6;
         }
 
         .chat-box input {
@@ -146,7 +174,7 @@
             background: #8b5cf6;
         }
 
-        /* Reviewer Modal (QA 決策視窗) */
+        /* Reviewer Modal */
         .modal-overlay {
             display: none;
             position: fixed;
@@ -199,7 +227,6 @@
             border-color: var(--primary);
         }
 
-        /* 動畫 */
         .pulse {
             animation: pulse 1.5s infinite;
         }
@@ -223,25 +250,30 @@
 <body>
 
     <div class="control-panel">
-        <h2>🛠️ CodeCraft Setup</h2>
+        <h2>🛠️ CodeCraft Studio</h2>
 
         <div>
-            <label>Project Name (Optional)</label>
-            <input type="text" id="outputDir" placeholder="e.g. my-awesome-app">
+            <label>Project Folder (Optional)</label>
+            <div style="display: flex; gap: 8px;">
+                <input type="text" id="outputDir" placeholder="Leave blank to let AI decide...">
+                <button class="btn-secondary" onclick="loadExistingProject()"
+                    title="Load a previous project to modify it">📂 Load</button>
+            </div>
         </div>
 
         <div>
             <label>DeepSeek API Key</label>
-            <input type="password" id="apiKey" placeholder="sk-xxxxxxxxxx (Required)">
+            <input type="password" id="apiKey" placeholder="Paste your API key here (sk-...)">
         </div>
 
         <div>
-            <label>Project Description</label>
-            <textarea id="description" placeholder="Describe your app in detail..."></textarea>
+            <label>What do you want to build?</label>
+            <textarea id="description"
+                placeholder="E.g., A beautiful Todo List application with a dark mode toggle..."></textarea>
         </div>
 
         <div>
-            <label>Output Language (English First)</label>
+            <label>Output Language</label>
             <select id="lang">
                 <option value="en">English (Professional Grade)</option>
                 <option value="zh">繁體中文</option>
@@ -249,26 +281,48 @@
         </div>
 
         <div class="checkbox-group">
-            <label class="checkbox-label"><input type="checkbox" id="install" checked> Auto Install npm</label>
-            <label class="checkbox-label"><input type="checkbox" id="test" checked> QA Self-Testing</label>
-            <label class="checkbox-label"><input type="checkbox" id="force"> Force Overwrite</label>
+            <div>
+                <label class="checkbox-label"><input type="checkbox" id="install" checked> ✨ Auto-Setup
+                    Environment</label>
+                <div class="checkbox-subtext">(Recommended) Automatically downloads necessary files to make your app
+                    run.</div>
+            </div>
+            <div>
+                <label class="checkbox-label"><input type="checkbox" id="test" checked> 🛡️ AI Auto-Fix &
+                    Testing</label>
+                <div class="checkbox-subtext">(Recommended) AI will test your app and fix bugs automatically.</div>
+            </div>
+            <div>
+                <label class="checkbox-label"><input type="checkbox" id="force"> ⚠️ Allow Overwriting Files</label>
+                <div class="checkbox-subtext">Check this only if you want to replace existing code.</div>
+            </div>
         </div>
 
-        <button id="generateBtn" onclick="generateProject()">🚀 Launch Agentic Workflow</button>
+        <button id="generateBtn" onclick="generateProject()">🚀 Generate New Project</button>
+
+        <hr style="border-color: #334155; margin: 15px 0;">
+        <button id="publishBtn" onclick="publishToWeb()" style="background: #10b981; margin-top: 5px;">
+            🌐 One-Click Publish to Web
+        </button>
+        <div id="publishUrl"
+            style="margin-top: 10px; color: #06b6d4; font-weight: bold; font-size: 0.9rem; word-break: break-all;">
+        </div>
     </div>
 
     <div class="workspace">
-        <div class="terminal" id="terminal">Welcome to CodeCraft Agentic Terminal. Ready to deploy.\n</div>
+        <div class="terminal" id="terminal">Welcome to CodeCraft. Enter your requirements to start, or load an existing
+            project to edit.\n</div>
 
-        <div class="chat-box">
-            <input type="text" id="patchMsg" placeholder="AI Patch: Tell AI how to modify the current code..." disabled>
-            <button id="patchBtn" onclick="sendPatch()" disabled>✨ Apply Patch</button>
+        <div class="chat-box" id="patchBox">
+            <input type="text" id="patchMsg"
+                placeholder="🔒 Please generate or load a project first to unlock AI Editing..." disabled>
+            <button id="patchBtn" onclick="sendPatch()" disabled>✨ AI Magic Edit</button>
         </div>
     </div>
 
     <div class="modal-overlay" id="reviewerModal">
         <div class="modal">
-            <h3>⚠️ QA Agent Intervention Required</h3>
+            <h3>⚠️ Action Required</h3>
             <p id="reviewerMsg">The system encountered an unresolvable issue during testing.</p>
             <div id="reviewerOptions"></div>
             <button onclick="closeModal()" style="margin-top: 15px; background: #64748b;">Ignore & Continue</button>
@@ -280,14 +334,13 @@
         const generateBtn = document.getElementById('generateBtn');
         const patchMsg = document.getElementById('patchMsg');
         const patchBtn = document.getElementById('patchBtn');
+        const patchBox = document.getElementById('patchBox');
 
-        // 終端機輸出小幫手
         function appendLog(text) {
             terminal.innerHTML += text.replace(/\n/g, '<br>').replace(/\[31m/g, '<span style="color:#ef4444;">').replace(/\[32m/g, '<span style="color:#10b981;">').replace(/\[33m/g, '<span style="color:#f59e0b;">').replace(/\[35m/g, '<span style="color:#d946ef;">').replace(/\[36m/g, '<span style="color:#06b6d4;">').replace(/\[0m/g, '</span>');
             terminal.scrollTop = terminal.scrollHeight;
         }
 
-        // 解析資料流，並攔截秘密標籤
         async function readStream(response) {
             const reader = response.body.getReader();
             const decoder = new TextDecoder("utf-8");
@@ -296,44 +349,59 @@
             while (true) {
                 const { done, value } = await reader.read();
                 if (done) break;
-
                 buffer += decoder.decode(value, { stream: true });
+                let lines = buffer.split('\n');
+                buffer = lines.pop();
 
-                // 攔截 QA Reviewer 秘密標籤
-                if (buffer.includes('___REVIEWER_ACTION___:')) {
-                    const parts = buffer.split('___REVIEWER_ACTION___:');
-                    appendLog(parts[0]); // 印出標籤前面的正常日誌
-
-                    try {
-                        // 嘗試解析隱藏的 JSON
-                        const jsonStr = parts[1].split('\n')[0];
-                        const reviewData = JSON.parse(jsonStr);
-                        showReviewerModal(reviewData);
-                    } catch (e) {
-                        console.error("Failed to parse Reviewer JSON");
+                for (let line of lines) {
+                    if (line.includes('___REVIEWER_ACTION___:')) {
+                        const parts = line.split('___REVIEWER_ACTION___:');
+                        if (parts[0]) appendLog(parts[0] + '\n');
+                        try {
+                            const reviewData = JSON.parse(parts[1]);
+                            showReviewerModal(reviewData);
+                        } catch (e) {
+                            console.error("Failed to parse Reviewer JSON:", e);
+                        }
+                    } else {
+                        appendLog(line + '\n');
                     }
-                    buffer = parts[1].substring(parts[1].indexOf('\n') + 1); // 清理緩衝區
-                } else {
-                    // 實時印出日誌
-                    let lines = buffer.split('\n');
-                    buffer = lines.pop(); // 保留最後一行未完成的字串
-                    if (lines.length > 0) appendLog(lines.join('\n') + '\n');
                 }
             }
             if (buffer.length > 0) appendLog(buffer);
         }
 
-        // 啟動主流程
+        // 解鎖 AI 修改區的 UI 特效
+        function unlockPatching(projectName) {
+            patchMsg.disabled = false;
+            patchBtn.disabled = false;
+            patchBox.classList.add('unlocked');
+            patchMsg.placeholder = `💬 Tell AI what to change in [${projectName}] (e.g. Add a shopping cart)...`;
+        }
+
+        // [新增功能] 載入舊專案
+        function loadExistingProject() {
+            const folderName = document.getElementById('outputDir').value.trim();
+            if (!folderName) {
+                alert("Please enter the exact Project Folder name you want to load.");
+                return;
+            }
+            appendLog(`\n[36m📂 Scanning existing project [${folderName}]... Context loaded into AI memory.[0m\n`);
+            unlockPatching(folderName);
+        }
+
         async function generateProject() {
             const description = document.getElementById('description').value;
             const apiKey = document.getElementById('apiKey').value;
+            const outputDir = document.getElementById('outputDir').value;
 
-            if (!description) return alert('Please enter a project description.');
+            if (!description) return alert('Please tell the AI what you want to build.');
+            if (!apiKey) return alert('API Key is required to launch the AI.');
 
             generateBtn.disabled = true;
             generateBtn.classList.add('pulse');
             terminal.innerHTML = '';
-            appendLog("🚀 Initializing CodeCraft Agentic Pipeline...\n");
+            appendLog("🚀 Initializing AI Architect...\n");
 
             try {
                 const response = await fetch('/api/generate', {
@@ -341,7 +409,7 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         description,
-                        outputDir: document.getElementById('outputDir').value,
+                        outputDir: outputDir,
                         apiKey: apiKey,
                         lang: document.getElementById('lang').value,
                         install: document.getElementById('install').checked,
@@ -351,10 +419,7 @@
                 });
 
                 await readStream(response);
-
-                // 解鎖 AI 修改功能
-                patchMsg.disabled = false;
-                patchBtn.disabled = false;
+                unlockPatching(outputDir || "your project");
 
             } catch (error) {
                 appendLog(`\n[31m❌ Connection Error: ${error.message}[0m`);
@@ -364,17 +429,17 @@
             }
         }
 
-        // AI 局部修改補丁
         async function sendPatch() {
             const message = patchMsg.value;
             const apiKey = document.getElementById('apiKey').value;
             const projectDir = document.getElementById('outputDir').value;
 
-            if (!message || !projectDir) return alert('Please specify a project directory and a message.');
+            if (!message) return alert('Please tell the AI what you want to change.');
+            if (!projectDir) return alert('Please enter the Project Folder name you want to modify.');
 
             patchBtn.disabled = true;
             patchMsg.value = '';
-            appendLog(`\n\n[35m✨ Sending Patch Request: "${message}"...[0m\n`);
+            appendLog(`\n\n[35m✨ Submitting AI Edit Request: "${message}"...[0m\n`);
 
             try {
                 const response = await fetch('/api/modify', {
@@ -390,7 +455,6 @@
             }
         }
 
-        // 顯示 QA 決策視窗
         function showReviewerModal(data) {
             document.getElementById('reviewerMsg').innerText = data.message || "An issue needs your decision.";
             const optionsDiv = document.getElementById('reviewerOptions');
@@ -402,10 +466,10 @@
                     btn.className = 'option-btn';
                     btn.innerText = `${String.fromCharCode(65 + idx)}. ${opt}`;
                     btn.onclick = () => {
-                        appendLog(`\n[36m🧑‍💻 User selected option: ${opt}[0m\n`);
+                        appendLog(`\n[36m🧑‍💻 User selected: ${opt}[0m\n`);
                         patchMsg.value = `I encountered an error. Please apply this solution: ${opt}`;
                         closeModal();
-                        sendPatch(); // 直接呼叫補丁邏輯來修復
+                        sendPatch();
                     };
                     optionsDiv.appendChild(btn);
                 });
@@ -415,6 +479,40 @@
 
         function closeModal() {
             document.getElementById('reviewerModal').style.display = 'none';
+        }
+
+        // 🌐 呼叫後端進行公網部署 (LocalTunnel 內網穿透)
+        async function publishToWeb() {
+            const publishBtn = document.getElementById('publishBtn');
+            const publishUrl = document.getElementById('publishUrl');
+            const projectDir = document.getElementById('outputDir').value;
+
+            if (!projectDir) return alert('Please load or generate a project first!');
+
+            publishBtn.disabled = true;
+            publishBtn.innerText = "⏳ Publishing...";
+            appendLog(`\n[36m🌐 Initiating Cloud Deployment for [${projectDir}]...[0m\n`);
+
+            try {
+                const response = await fetch('/api/publish', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ projectDir })
+                });
+                const data = await response.json();
+
+                if (data.url) {
+                    publishUrl.innerHTML = `✅ Live URL: <a href="${data.url}" target="_blank" style="color: #06b6d4;">${data.url}</a><br><span style="font-size: 0.75rem; color:#94a3b8;">(Share this link with anyone!)</span>`;
+                    appendLog(`[32m✅ Deployment Successful! URL: ${data.url}[0m\n`);
+                } else {
+                    appendLog(`[31m❌ Publishing failed: ${data.error}[0m\n`);
+                }
+            } catch (err) {
+                appendLog(`[31m❌ Connection error: ${err.message}[0m\n`);
+            } finally {
+                publishBtn.innerText = "🌐 One-Click Publish to Web";
+                publishBtn.disabled = false;
+            }
         }
     </script>
 </body>

@@ -25,7 +25,7 @@ program
 
       // 2. 呼叫架構師代理 (委派至 Service)
       const blueprint = await AIService.callArchitect(description, apiKey, options.lang);
-      
+
       // 3. 多代理協作生成與 QA 循環 (委派至 Service)
       // 這部分的複雜邏輯現在被封裝在 Service 中，保持 CLI 入口簡潔
       await AIService.executeGenerationPipeline(targetDir, blueprint, description, apiKey, options.lang);
