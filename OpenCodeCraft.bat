@@ -7,7 +7,6 @@ echo ===================================================
 echo       🚀 Welcome to CodeCraft Agentic IDE 🚀
 echo ===================================================
 echo.
-
 set "NEEDS_RESTART=0"
 
 :: Step 1: Bootstrapping - Check Node.js runtime
@@ -65,6 +64,9 @@ if not exist "node_modules\" (
 echo [System] Booting up CodeCraft Agentic Workflow Engine and Web UI...
 echo [System] Keep this terminal open. The system will be available in your browser!
 echo.
+
+:: [新增核心修復] 在啟動 Node.js 前，自動呼叫 Windows 預設瀏覽器打開網頁
+start http://localhost:8080
 
 :: Standardized entry point for the Web GUI
 node src/server.js

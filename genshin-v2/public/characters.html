@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Characters · Genshin Impact Wiki</title>
+    <!-- Tailwind CSS via CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Custom styles -->
+    <link rel="stylesheet" href="/css/style.css">
+    <!-- Main JS (utility functions) -->
+    <script src="/js/main.js" defer></script>
+    <!-- Page-specific JS for character gallery -->
+    <script src="/js/characters.js" defer></script>
+</head>
+<body class="bg-gray-50 text-gray-800 font-sans antialiased">
+
+    <!-- ====== Navigation ====== -->
+    <header class="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-30">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-16">
+            <a href="/index.html" class="text-xl font-bold tracking-tight text-indigo-700 hover:text-indigo-900 transition">
+                ⚔️ Genshin Wiki
+            </a>
+            <nav class="flex gap-6 text-sm font-medium">
+                <a href="/index.html" class="text-gray-600 hover:text-indigo-600 transition">Home</a>
+                <a href="/characters.html" class="text-indigo-700 border-b-2 border-indigo-500 pb-1">Characters</a>
+                <a href="/about.html" class="text-gray-600 hover:text-indigo-600 transition">About</a>
+            </nav>
+        </div>
+    </header>
+
+    <!-- ====== Main Content ====== -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+
+        <!-- Page heading -->
+        <div class="mb-10 text-center">
+            <h1 class="text-4xl font-extrabold text-gray-900 sm:text-5xl">All Characters</h1>
+            <p class="mt-3 text-lg text-gray-500 max-w-2xl mx-auto">
+                Browse the full roster of playable characters from Teyvat. Click any card for detailed information.
+            </p>
+        </div>
+
+        <!-- ====== Character Grid ====== -->
+        <!-- 
+            This container will be populated by characters.js.
+            The fallback (loading state) is shown until JS replaces it.
+        -->
+        <div id="character-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+            <!-- Loading skeleton (3 placeholder cards) -->
+            <div class="animate-pulse bg-white rounded-2xl shadow p-5 space-y-4">
+                <div class="bg-gray-200 h-40 rounded-xl"></div>
+                <div class="bg-gray-200 h-4 w-3/4 rounded"></div>
+                <div class="bg-gray-200 h-3 w-1/2 rounded"></div>
+                <div class="bg-gray-200 h-3 w-2/3 rounded"></div>
+            </div>
+            <div class="animate-pulse bg-white rounded-2xl shadow p-5 space-y-4 hidden sm:block">
+                <div class="bg-gray-200 h-40 rounded-xl"></div>
+                <div class="bg-gray-200 h-4 w-3/4 rounded"></div>
+                <div class="bg-gray-200 h-3 w-1/2 rounded"></div>
+                <div class="bg-gray-200 h-3 w-2/3 rounded"></div>
+            </div>
+            <div class="animate-pulse bg-white rounded-2xl shadow p-5 space-y-4 hidden md:block">
+                <div class="bg-gray-200 h-40 rounded-xl"></div>
+                <div class="bg-gray-200 h-4 w-3/4 rounded"></div>
+                <div class="bg-gray-200 h-3 w-1/2 rounded"></div>
+                <div class="bg-gray-200 h-3 w-2/3 rounded"></div>
+            </div>
+        </div>
+
+        <!-- Error / fallback message (hidden by default) -->
+        <div id="error-message" class="hidden mt-8 text-center text-red-600 bg-red-50 border border-red-200 rounded-xl p-4">
+            <p class="font-semibold">⚠️ Unable to load characters from server.</p>
+            <p class="text-sm mt-1">Showing offline sample data. Please check your connection.</p>
+        </div>
+
+    </main>
+
+    <!-- ====== Footer ====== -->
+    <footer class="bg-white border-t border-gray-200 mt-16 py-6 text-center text-sm text-gray-400">
+        <p>Genshin Impact Wiki · Fan project · Data sourced from in-game and community APIs.</p>
+        <p class="mt-1">Not affiliated with HoYoverse.</p>
+    </footer>
+
+    <!-- ====== Page-specific JavaScript ====== -->
+    <script>
+        /**
+         * characters.js (embedded for zero external dependency)
+         * 
+         * Fetches all characters from the backend API.
+         * On failure, falls back to a curated mock dataset (exact, high-fidelity).
+         * Renders each character as a clickable card linking to detail.html?id=...
+         */
+        (function() {
+            'use strict';
+
+            // --- DOM refs ---
+            const grid = document.getElementById('character-grid');
+            const errorDiv = document.getElementById('error-message');
+
+            // --- High-fidelity mock data (fallback) ---
+            // Each object matches the database schema: id, name, element, weapon, region, description, image_url
+            const MOCK_CHARACTERS = [
+                { id: 1, name: 'Traveler (Anemo)', element: 'Anemo', weapon: 'Sword', region: 'Mondstadt', description: 'A traveler from another world who wields the power of the wind.', image_url: 'https://api.genshin.dev/characters/traveler-anemo/icon' },
+                { id: 2, name: 'Amber', element: 'Pyro', weapon: 'Bow', region: 'Mondstadt', description: 'The only Outrider of the Knights of Favonius. Always ready to help.', image_url: 'https://api.genshin.dev/characters/amber/icon' },
+                { id: 3, name: 'Kaeya', element: 'Cryo', weapon: 'Sword', region: 'Mondstadt', description: 'The Cavalry Captain of the Knights of Favonius. A mysterious man.', image_url: 'https://api.genshin.dev/characters/kaeya/icon' },
+                { id: 4, name: 'Lisa', element: 'Electro', weapon: 'Catalyst', region: 'Mondstadt', description: 'The librarian of the Knights of Favonius. A powerful witch.', image_url: 'https://api.genshin.dev/characters/lisa/icon' },
+                { id: 5, name: 'Xiangling', element: 'Pyro', weapon: 'Polearm', region: 'Liyue', description: 'A renowned chef from Liyue. She loves to experiment with new recipes.', image_url: 'https://api.genshin.dev/characters/xiangling/icon' },
+                { id: 6, name: 'Beidou', element: 'Electro', weapon: 'Claymore', region: 'Liyue', description: 'The captain of the Crux Fleet. A fearless and bold leader.', image_url: 'https://api.genshin.dev/characters/beidou/icon' },
+                { id: 7, name: 'Xingqiu', element: 'Hydro', weapon: 'Sword', region: 'Liyue', description: 'A young man from the Feiyun Commerce Guild. A skilled martial artist.', image_url: 'https://api.genshin.dev/characters/xingqiu/icon' },
+                { id: 8, name: 'Fischl', element: 'Electro', weapon: 'Bow', region: 'Mondstadt', description: 'A mysterious girl who calls herself the "Prinzessin der Verurteilung".', image_url: 'https://api.genshin.dev/characters/fischl/icon' },
+                { id: 9, name: 'Bennett', element: 'Pyro', weapon: 'Sword', region: 'Mondstadt', description: 'An adventurer from the Mondstadt Adventurers\' Guild. Unlucky but optimistic.', image_url: 'https://api.genshin.dev/characters/bennett/icon' },
+                { id: 10, name: 'Noelle', element: 'Geo', weapon: 'Claymore', region: 'Mondstadt', description: 'A maid in the Knights of Favonius. She dreams of becoming a true knight.', image_url: 'https://api.genshin.dev/characters/noelle/icon' },
+                { id: 11, name: 'Chongyun', element: 'Cryo', weapon: 'Claymore', region: 'Liyue', description: 'A young exorcist from a family of exorcists. He has a pure heart.', image_url: 'https://api.genshin.dev/characters/chongyun/icon' },
+                { id: 12, name: 'Sucrose', element: 'Anemo', weapon: 'Catalyst', region: 'Mondstadt', description: 'An alchemist who specializes in bio-alchemy. She is shy but brilliant.', image_url: 'https://api.genshin.dev/characters/sucrose/icon' }
+            ];
+
+            // --- Utility: render a single character card ---
+            function renderCharacterCard(character) {
+                const card = document.createElement('a');
+                card.href = `/detail.html?id=${character.id}`;
+                card.className = 'block bg-white rounded-2xl shadow-md hover:shadow-xl transition-shadow duration-200 overflow-hidden border border-gray-100 hover:border-indigo-200';
+
+                // Image (with fallback if broken)
+                const img = document.createElement('img');
+                img.src = character.image_url || 'https://api.genshin.dev/characters/unknown/icon';
+                img.alt = `${character.name} icon`;
+                img.className = 'w-full h-48 object-cover bg-gray-100';
+                img.loading = 'lazy';
+                img.onerror = function() {
+                    this.src = 'https://api.genshin.dev/characters/unknown/icon'; // fallback silhouette
+                };
+
+                // Info section
+                const info = document.createElement('div');
+                info.className = 'p-4 space-y-1';
+
+                const nameEl = document.createElement('h3');
+                nameEl.className = 'text-lg font-bold text-gray-900 truncate';
+                nameEl.textContent = character.name;
+
+                const metaEl = document.createElement('p');
+                metaEl.className = 'text-sm text-gray-500 flex flex-wrap gap-x-3 gap-y-1';
+                metaEl.innerHTML = `
+                    <span class="inline-flex items-center gap-1">
+                        <span class="w-2 h-2 rounded-full inline-block" style="background: ${getElementColor(character.element)}"></span>
+                        ${character.element}
+                    </span>
+                    <span>⚔️ ${character.weapon}</span>
+                    <span>📍 ${character.region}</span>
+                `;
+
+                info.appendChild(nameEl);
+                info.appendChild(metaEl);
+                card.appendChild(img);
+                card.appendChild(info);
+
+                return card;
+            }
+
+            // --- Helper: element color mapping ---
+            function getElementColor(element) {
+                const map = {
+                    'Anemo': '#7EC8E3',
+                    'Geo': '#F5D742',
+                    'Electro': '#B47DD4',
+                    'Dendro': '#A5D6A7',
+                    'Hydro': '#4FC3F7',
+                    'Pyro': '#FF7043',
+                    'Cryo': '#81D4FA'
+                };
+                return map[element] || '#9CA3AF';
+            }
+
+            // --- Render all characters into grid ---
+            function renderCharacters(characters) {
+                // Clear grid (remove skeletons)
+                grid.innerHTML = '';
+                // Append each card
+                characters.forEach(char => {
+                    grid.appendChild(renderCharacterCard(char));
+                });
+            }
+
+            // --- Main fetch + fallback ---
+            async function loadCharacters() {
+                try {
+                    // Attempt to fetch from backend API
+                    const response = await fetch('/api/characters');
+                    if (!response.ok) {
+                        throw new Error(`Server responded with ${response.status}`);
+                    }
+                    const data = await response.json();
+                    // data should be an array of character objects
+                    if (Array.isArray(data) && data.length > 0) {
+                        renderCharacters(data);
+                        // hide error if visible
+                        errorDiv.classList.add('hidden');
+                    } else {
+                        // empty array -> fallback
+                        throw new Error('Empty data from server');
+                    }
+                } catch (err) {
+                    console.warn('API fetch failed, using mock data:', err.message);
+                    // Show fallback message
+                    errorDiv.classList.remove('hidden');
+                    // Render mock data
+                    renderCharacters(MOCK_CHARACTERS);
+                }
+            }
+
+            // --- Initialize ---
+            // Wait for DOM (defer already, but safe)
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', loadCharacters);
+            } else {
+                loadCharacters();
+            }
+
+        })();
+    </script>
+
+    <!-- Inline style for extra polish (part of style.css replacement) -->
+    <style>
+        /* Additional custom touches */
+        #character-grid a:hover img {
+            transform: scale(1.02);
+            transition: transform 0.2s ease;
+        }
+        #character-grid a img {
+            transition: transform 0.2s ease;
+        }
+        .animate-pulse {
+            background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+            background-size: 200% 100%;
+            animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+    </style>
+
+</body>
+</html>

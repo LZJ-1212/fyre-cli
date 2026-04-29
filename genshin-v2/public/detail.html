@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Character Detail - Genshin Impact Wiki</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="/css/style.css">
+    <style>
+        .character-detail-image {
+            max-height: 500px;
+            object-fit: contain;
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+        }
+        .element-badge {
+            display: inline-block;
+            padding: 4px 16px;
+            border-radius: 20px;
+            font-weight: 600;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .stat-label {
+            color: #a0aec0;
+            font-weight: 500;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .stat-value {
+            color: #e2e8f0;
+            font-weight: 600;
+            font-size: 1.1rem;
+        }
+        .loading-spinner {
+            border: 4px solid rgba(255,255,255,0.1);
+            border-top: 4px solid #fbbf24;
+            border-radius: 50%;
+            width: 48px;
+            height: 48px;
+            animation: spin 0.8s linear infinite;
+            margin: 2rem auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .error-container {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-radius: 12px;
+            padding: 2rem;
+            text-align: center;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen">
+    <!-- Navigation -->
+    <nav class="bg-gray-800 border-b border-gray-700 shadow-lg">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <div class="flex items-center space-x-8">
+                    <a href="/index.html" class="text-xl font-bold text-yellow-400 hover:text-yellow-300 transition-colors">
+                        Genshin Wiki
+                    </a>
+                    <div class="hidden md:flex space-x-6">
+                        <a href="/index.html" class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm font-medium transition-colors">
+                            Home
+                        </a>
+                        <a href="/characters.html" class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm font-medium transition-colors">
+                            Characters
+                        </a>
+                        <a href="/about.html" class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm font-medium transition-colors">
+                            About
+                        </a>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <a href="/characters.html" class="bg-yellow-500 hover:bg-yellow-400 text-gray-900 px-4 py-2 rounded-lg text-sm font-semibold transition-colors">
+                        Browse All
+                    </a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Loading State -->
+        <div id="loadingState" class="flex flex-col items-center justify-center py-20">
+            <div class="loading-spinner"></div>
+            <p class="mt-4 text-gray-400 text-lg">Loading character data...</p>
+        </div>
+
+        <!-- Error State -->
+        <div id="errorState" class="hidden py-20">
+            <div class="error-container max-w-2xl mx-auto">
+                <svg class="w-16 h-16 mx-auto text-red-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"/>
+                </svg>
+                <h2 class="text-2xl font-bold text-red-300 mb-2">Character Not Found</h2>
+                <p class="text-gray-400 mb-6" id="errorMessage">Unable to load character details. Please try again.</p>
+                <div class="flex justify-center space-x-4">
+                    <a href="/characters.html" class="bg-gray-700 hover:bg-gray-600 text-white px-6 py-2 rounded-lg transition-colors">
+                        Back to Characters
+                    </a>
+                    <button onclick="location.reload()" class="bg-yellow-500 hover:bg-yellow-400 text-gray-900 px-6 py-2 rounded-lg font-semibold transition-colors">
+                        Retry
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Character Detail Content -->
+        <div id="characterDetail" class="hidden">
+            <div class="mb-6">
+                <a href="/characters.html" class="inline-flex items-center text-yellow-400 hover:text-yellow-300 transition-colors">
+                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+                    </svg>
+                    Back to All Characters
+                </a>
+            </div>
+
+            <div class="bg-gray-800 rounded-2xl shadow-2xl overflow-hidden border border-gray-700">
+                <div class="md:flex">
+                    <!-- Image Section -->
+                    <div class="md:w-1/2 bg-gray-900 p-8 flex items-center justify-center">
+                        <img id="characterImage" src="" alt="Character Image" class="character-detail-image w-full h-auto" onerror="this.onerror=null; this.src='https://via.placeholder.com/600x800?text=Character+Image';">
+                    </div>
+
+                    <!-- Info Section -->
+                    <div class="md:w-1/2 p-8 lg:p-12">
+                        <div class="flex items-center justify-between mb-6">
+                            <h1 id="characterName" class="text-4xl font-bold text-white"></h1>
+                            <span id="elementBadge" class="element-badge"></span>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-6 mb-8">
+                            <div>
+                                <p class="stat-label">Weapon</p>
+                                <p id="characterWeapon" class="stat-value"></p>
+                            </div>
+                            <div>
+                                <p class="stat-label">Region</p>
+                                <p id="characterRegion" class="stat-value"></p>
+                            </div>
+                        </div>
+
+                        <div class="mb-8">
+                            <h3 class="text-lg font-semibold text-yellow-400 mb-3">Description</h3>
+                            <p id="characterDescription" class="text-gray-300 leading-relaxed"></p>
+                        </div>
+
+                        <div class="flex flex-wrap gap-3">
+                            <a href="/characters.html" class="bg-gray-700 hover:bg-gray-600 text-white px-6 py-3 rounded-lg transition-colors text-sm font-medium">
+                                View All Characters
+                            </a>
+                            <a href="/index.html" class="bg-yellow-500 hover:bg-yellow-400 text-gray-900 px-6 py-3 rounded-lg transition-colors text-sm font-medium">
+                                Back to Home
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-gray-800 border-t border-gray-700 mt-12">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+            <div class="flex flex-col md:flex-row justify-between items-center">
+                <p class="text-gray-400 text-sm">Genshin Impact Wiki &copy; 2025. Fan project, not affiliated with HoYoverse.</p>
+                <div class="flex space-x-6 mt-4 md:mt-0">
+                    <a href="/index.html" class="text-gray-400 hover:text-white text-sm transition-colors">Home</a>
+                    <a href="/characters.html" class="text-gray-400 hover:text-white text-sm transition-colors">Characters</a>
+                    <a href="/about.html" class="text-gray-400 hover:text-white text-sm transition-colors">About</a>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // ====== MOCK DATA FALLBACK ======
+        const MOCK_CHARACTERS = [
+            { id: 1, name: "Traveler (Anemo)", element: "Anemo", weapon: "Sword", region: "Mondstadt", description: "A traveler from another world who has the power to control the wind. Their journey across Teyvat has just begun.", image_url: "https://api.genshin.dev/characters/traveler-anemo/icon" },
+            { id: 2, name: "Amber", element: "Pyro", weapon: "Bow", region: "Mondstadt", description: "The only remaining Outrider of the Knights of Favonius. She is always ready to help those in need.", image_url: "https://api.genshin.dev/characters/amber/icon" },
+            { id: 3, name: "Kaeya", element: "Cryo", weapon: "Sword", region: "Mondstadt", description: "The Cavalry Captain of the Knights of Favonius. He is known for his mysterious past and quick wit.", image_url: "https://api.genshin.dev/characters/kaeya/icon" },
+            { id: 4, name: "Lisa", element: "Electro", weapon: "Catalyst", region: "Mondstadt", description: "The librarian of the Knights of Favonius. She is a powerful mage who prefers a quiet life.", image_url: "https://api.genshin.dev/characters/lisa/icon" },
+            { id: 5, name: "Jean", element: "Anemo", weapon: "Sword", region: "Mondstadt", description: "The Acting Grand Master of the Knights of Favonius. She is dedicated to protecting Mondstadt.", image_url: "https://api.genshin.dev/characters/jean/icon" },
+            { id: 6, name: "Diluc", element: "Pyro", weapon: "Claymore", region: "Mondstadt", description: "The wealthy owner of the Dawn Winery. He fights against the Abyss Order in secret.", image_url: "https://api.genshin.dev/characters/diluc/icon" },
+            { id: 7, name: "Venti", element: "Anemo", weapon: "Bow", region: "Mondstadt", description: "The free-spirited bard of Mondstadt. He is actually the Anemo Archon, Barbatos.", image_url: "https://api.genshin.dev/characters/venti/icon" },
+            { id: 8, name: "Xiangling", element: "Pyro", weapon: "Polearm", region: "Liyue", description: "The Head Chef of the Wanmin Restaurant. She loves to experiment with new recipes.", image_url: "https://api.genshin.dev/characters/xiangling/icon" },
+            { id: 9, name: "Zhongli", element: "Geo", weapon: "Polearm", region: "Liyue", description: "The Geo Archon who has retired from ruling Liyue. He now works as a consultant.", image_url: "https://api.genshin.dev/characters/zhongli/icon" },
+            { id: 10, name: "Raiden Shogun", element: "Electro", weapon: "Polearm", region: "Inazuma", description: "The Electro Archon who rules Inazuma with an iron fist. She seeks eternity.", image_url: "https://api.genshin.dev/characters/raiden-shogun/icon" }
+        ];
+
+        // ====== UTILITY FUNCTIONS ======
+        function getElementColor(element) {
+            const colors = {
+                'Anemo': 'bg-green-500 text-white',
+                'Pyro': 'bg-red-500 text-white',
+                'Cryo': 'bg-blue-300 text-gray-900',
+                'Electro': 'bg-purple-500 text-white',
+                'Geo': 'bg-yellow-600 text-white',
+                'Hydro': 'bg-blue-500 text-white',
+                'Dendro': 'bg-green-600 text-white'
+            };
+            return colors[element] || 'bg-gray-500 text-white';
+        }
+
+        function getCharacterFromMock(id) {
+            return MOCK_CHARACTERS.find(c => c.id === parseInt(id)) || null;
+        }
+
+        // ====== MAIN FETCH FUNCTION ======
+        async function fetchCharacter(id) {
+            try {
+                const response = await fetch(`/api/characters/${id}`);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+                return data;
+            } catch (error) {
+                console.warn('API fetch failed, using mock data:', error.message);
+                const mockChar = getCharacterFromMock(id);
+                if (!mockChar) {
+                    throw new Error('Character not found in mock data');
+                }
+                return mockChar;
+            }
+        }
+
+        // ====== RENDER FUNCTION ======
+        function renderCharacterDetail(character) {
+            // Hide loading, show detail
+            document.getElementById('loadingState').classList.add('hidden');
+            document.getElementById('errorState').classList.add('hidden');
+            document.getElementById('characterDetail').classList.remove('hidden');
+
+            // Set image
+            const img = document.getElementById('characterImage');
+            if (character.image_url && character.image_url !== '') {
+                img.src = character.image_url;
+            } else {
+                img.src = `https://api.genshin.dev/characters/${character.name.toLowerCase().replace(/ /g, '-')}/icon`;
+            }
+
+            // Set name
+            document.getElementById('characterName').textContent = character.name;
+
+            // Set element badge
+            const badge = document.getElementById('elementBadge');
+            badge.textContent = character.element;
+            badge.className = `element-badge ${getElementColor(character.element)}`;
+
+            // Set weapon
+            document.getElementById('characterWeapon').textContent = character.weapon || 'Unknown';
+
+            // Set region
+            document.getElementById('characterRegion').textContent = character.region || 'Unknown';
+
+            // Set description
+            document.getElementById('characterDescription').textContent = character.description || 'No description available.';
+        }
+
+        // ====== ERROR HANDLER ======
+        function showError(message) {
+            document.getElementById('loadingState').classList.add('hidden');
+            document.getElementById('characterDetail').classList.add('hidden');
+            document.getElementById('errorState').classList.remove('hidden');
+            document.getElementById('errorMessage').textContent = message || 'Unable to load character details. Please try again.';
+        }
+
+        // ====== INITIALIZATION ======
+        document.addEventListener('DOMContentLoaded', async () => {
+            // Get character ID from URL
+            const urlParams = new URLSearchParams(window.location.search);
+            const characterId = urlParams.get('id');
+
+            if (!characterId) {
+                showError('No character ID provided. Please select a character from the gallery.');
+                return;
+            }
+
+            try {
+                const character = await fetchCharacter(characterId);
+                if (!character) {
+                    showError('Character not found. The character may have been removed.');
+                    return;
+                }
+                renderCharacterDetail(character);
+            } catch (error) {
+                showError(error.message || 'An unexpected error occurred while loading character data.');
+            }
+        });
+    </script>
+</body>
+</html>

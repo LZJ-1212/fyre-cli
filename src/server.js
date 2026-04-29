@@ -4,38 +4,36 @@ const fs = require('fs');
 const { exec } = require('child_process');
 const AIService = require('./services/aiService');
 const FileService = require('./services/fileService');
+const EnvService = require('./services/envService');
 
 const app = express();
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// [核心修復] 使用全域變數鎖定機制，防止重複劫持導致的日誌倍增
+// [核心修復] 移除 console.log 的劫持，只保留底層 stdout 攔截，徹底消滅雙重回音！
 let isStreamingHijacked = false;
-let originalLog = console.log;
 let originalStdoutWrite = process.stdout.write.bind(process.stdout);
 
 /**
- * 終極防彈日誌串流劫持器
+ * 終極防彈日誌串流劫持器 (純淨無回音版)
  */
 function hijackStream(res) {
-  if (isStreamingHijacked) return () => { }; // 如果已經在劫持中，不重複處理
+  if (isStreamingHijacked) return () => { };
 
   isStreamingHijacked = true;
 
-  console.log = (...args) => {
-    const msg = args.join(' ') + '\n';
-    res.write(msg); // 發送到前端
-    originalLog(...args); // 同步印在實體終端機
-  };
-
-  process.stdout.write = (chunk) => {
-    res.write(chunk.toString());
-    originalStdoutWrite(chunk);
+  // 唯一攔截點：因為所有的 console.log 最終都會流過這裡
+  process.stdout.write = (chunk, encoding, callback) => {
+    if (typeof chunk === 'string') {
+      res.write(chunk);
+    } else if (Buffer.isBuffer(chunk)) {
+      res.write(chunk.toString('utf8'));
+    }
+    return originalStdoutWrite(chunk, encoding, callback);
   };
 
   // 返回還原函數
   return () => {
-    console.log = originalLog;
     process.stdout.write = originalStdoutWrite;
     isStreamingHijacked = false;
   };
@@ -85,7 +83,7 @@ app.post('/api/modify', async (req, res) => {
     console.log(`\n\x1b[32m✅ Patch applied successfully using AST Smart Grafting.\x1b[0m`);
   } catch (err) {
     console.log(`\n\x1b[31m❌ Patch Failed: ${err.message}\x1b[0m`);
-    console.log(`\x1b[33m💡 [Tip] 請嘗試再次點擊修復按鈕，讓 AI 重新嘗試。[0m\n`);
+    console.log(`\x1b[33m💡 [Tip] 請嘗試再次點擊修復按鈕，讓 AI 重新嘗試。\x1b[0m\n`);
   } finally {
     restoreStream();
     res.end();
@@ -101,7 +99,6 @@ app.post('/api/start', async (req, res) => {
     const batPath = path.join(targetPath, 'Start_Project.bat');
 
     if (fs.existsSync(batPath)) {
-      // [核心修復] 僅使用 Windows start 指令彈出獨立視窗，徹底防止 Port 3000 被背景進程霸佔
       exec(`start "" "${batPath}"`, { cwd: targetPath });
       res.json({ success: true });
     } else {
@@ -131,10 +128,14 @@ app.post('/api/publish', async (req, res) => {
 });
 
 const PORT = 8080;
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   console.log(`\n===================================================`);
   console.log(`      🚀 Welcome to CodeCraft Agentic IDE 🚀`);
   console.log(`===================================================`);
+
+  // 啟動環境檢查
+  await EnvService.runHealthCheck();
+
   console.log(`\n[System] Booting up CodeCraft Agentic Workflow Engine...`);
   console.log(`✅ Core Services initialized successfully.`);
   console.log(`🚀 Web Interface running at: http://localhost:${PORT}\n`);
