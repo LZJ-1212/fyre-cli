@@ -42,8 +42,9 @@ class EnvService {
 
         console.log(`\n📦 Attempting to install ${softwareName} via system package manager...`);
         try {
-            const [command, ...args] = cmd.split(' ');
-            const installProcess = spawn(command, args, { stdio: 'inherit', shell: true });
+            // [核心修復] 既然使用了 shell: true，就絕對不要去切割指令。
+            // 直接將完整指令作為字串傳入，讓作業系統原生的 Shell 去解析 '&&' 等控制符號！
+            const installProcess = spawn(cmd, [], { stdio: 'inherit', shell: true });
 
             await new Promise((resolve, reject) => {
                 installProcess.on('close', code => code === 0 ? resolve() : reject());

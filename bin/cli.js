@@ -37,3 +37,6 @@ program
       process.exit(1);
     }
   });
+
+// [核心修復] 必須呼叫 parse，Commander 才會開始解析終端機輸入的參數並執行 action！
+program.parse(process.argv);

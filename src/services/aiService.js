@@ -2,19 +2,15 @@ const axios = require('axios');
 const inquirer = require('inquirer');
 const path = require('path');
 const fs = require('fs-extra');
-// 注意：這裡假設你將原本 cli.js 中的 runCommand 移到了 fileService，或者你可以暫時寫在這邊
 const FileService = require('./fileService');
 
 /**
  * 語言指令工廠 (Language Instruction Factory)
- * [How] 根據傳入的 lang 參數動態生成 Prompt 約束。
- * [Why] 滿足 A 級標準中的「國際化/英文優先」要求，確保系統輸出的變數、註解、UI 皆符合工業級英文規範。
  */
 function getLangInstruction(lang) {
     if (lang === 'zh') {
         return 'CRITICAL: The user requested Chinese. Please use fluent Traditional Chinese for all UI text, comments, and console outputs.';
     }
-    // 預設強制使用英文 (English-First Policy)
     return 'CRITICAL: You MUST use strictly professional English for ALL user interfaces, code comments, variable names, database schemas, and console outputs. NO CHINESE is allowed.';
 }
 
@@ -47,11 +43,10 @@ class AIService {
 
     /**
      * 階段 1：呼叫架構師代理 (The Architect Agent)
-     * [How] 傳入系統級 Prompt 與語言約束，要求 LLM 返回 JSON 格式的專案藍圖。
      */
     static async callArchitect(description, apiKey, lang) {
-        console.log(`\n👑 [Architect Agent] Analyzing requirements and designing blueprint...`);
-        // [進階系統設計] 企業級架構師提示詞：強制引入資料庫與現代化 UI 框架
+        console.log(`\n\x1b[35m👑 [Architect Agent] Analyzing requirements and designing blueprint...\x1b[0m`);
+
         const architectPrompt = `You are an elite Enterprise Software Architect. Design a PRODUCTION-READY, Deployment-Grade Full-Stack architecture based on the user's description.
 CRITICAL Requirements to maximize token usage and quality:
 1. REAL IMAGES CAPABILITY (NO PLACEHOLDERS): You MUST design a Backend API route (e.g., /api/images) that fetches real images from public APIs. The frontend MUST use this to render REAL images.
@@ -75,17 +70,14 @@ CRITICAL Requirements to maximize token usage and quality:
     }
 
     /**
-     * 階段 2 & 3：執行多代理生成與 QA 測試管線 (Generation & QA Pipeline)
-     * [How] 遍歷藍圖生成代碼 -> 安裝依賴 -> 執行自動化測試 -> 觸發 QA Agent 進行自癒修復 (Self-Healing)。
-     * [Why] 這是整個系統達到 Deployment Ready 的核心證明，將這個複雜邏輯封裝在 Service 中，可大幅提升系統可維護性。
+     * 階段 2 & 3：執行多代理生成與 QA 測試管線
      */
     static async executeGenerationPipeline(targetDir, blueprint, description, apiKey, lang) {
         const fileNames = Object.keys(blueprint);
-        console.log(`\n👷 [Coder Agent] Blueprint received. Writing ${fileNames.length} files...\n`);
+        console.log(`\n\x1b[36m👷 [Coder Agent] Blueprint received. Writing ${fileNames.length} files...\x1b[0m\n`);
 
         await fs.ensureDir(targetDir);
 
-        // 1. 啟動「專案記憶掃描」 (AST Context Injection)
         let existingContext = "";
         if (await fs.pathExists(targetDir)) {
             console.log(`\n🧠 [System] Project folder detected. Scanning existing codebase for Context...`);
@@ -98,14 +90,12 @@ CRITICAL Requirements to maximize token usage and quality:
             }
         }
 
-        // 2. 工程師代理生成檔案 (導入動態記憶體池架構)
         let count = 1;
-        let dynamicMemory = {}; // 存放本次生成過程中，剛寫好的檔案骨架
+        let dynamicMemory = {};
 
         for (const [filePath, fileRole] of Object.entries(blueprint)) {
             process.stdout.write(`⏳ (${count}/${fileNames.length}) Crafting ${filePath} ... `);
             try {
-                // 將「長期記憶 (舊檔案)」與「短期記憶 (剛生成的檔案)」合併
                 let combinedContext = existingContext || "";
                 if (Object.keys(dynamicMemory).length > 0) {
                     combinedContext += `\n\n[CRITICAL MEMORY: FILES JUST GENERATED IN THIS SESSION]\n${JSON.stringify(dynamicMemory, null, 2)}`;
@@ -114,7 +104,7 @@ CRITICAL Requirements to maximize token usage and quality:
                 const code = await this._callCoder(filePath, fileRole, blueprint, description, apiKey, lang, combinedContext);
                 await fs.outputFile(path.join(targetDir, filePath), code, 'utf8');
 
-                // [核心邏輯] 寫完檔案後，立刻提取骨架並存入動態記憶體
+                // 提取骨架並存入動態記憶體
                 dynamicMemory[filePath] = this._extractCodeSkeleton(code);
 
                 console.log(`\x1b[32m✅ Done\x1b[0m`);
@@ -124,7 +114,6 @@ CRITICAL Requirements to maximize token usage and quality:
             count++;
         }
 
-        // 3. 智慧依賴安裝與 QA 測試管線 (Smart Build Resolution)
         console.log(`\n📦 [System] Installing dependencies (npm install)...`);
         try {
             await FileService.runCommand('npm', ['install'], targetDir);
@@ -134,21 +123,20 @@ CRITICAL Requirements to maximize token usage and quality:
             const isZh = lang === 'zh';
             const modalData = {
                 message: isZh
-                    ? "依賴套件安裝失敗 (npm install)！這通常是因為 AI 選擇了需要 Windows C++ (node-gyp) 編譯的底層套件。請問要如何處理？"
-                    : "Dependency installation failed! This is usually because the AI chose a native package requiring Windows C++ tools (node-gyp). How to proceed?",
+                    ? "依賴套件安裝失敗！這通常是因為 AI 選擇了需要 C++ 編譯的套件。請問要如何處理？"
+                    : "Dependency installation failed! AI chose a native package. How to proceed?",
                 options: isZh
-                    ? ["請 AI 改用不需要 C++ 編譯的輕量級資料庫 (如純 sqlite3 或 JSON)", "強行略過安裝並嘗試啟動伺服器", "請 AI 分析這段報錯"]
-                    : ["Ask AI to rewrite using a lightweight database without C++ dependencies", "Force skip install and try to start", "Ask AI to analyze the error"]
+                    ? ["請 AI 改用不需要 C++ 編譯的輕量級資料庫", "強行略過安裝並嘗試啟動", "請 AI 分析這段報錯"]
+                    : ["Ask AI to rewrite without C++ dependencies", "Force skip install and try to start", "Ask AI to analyze the error"]
             };
 
             console.log(`\n___REVIEWER_ACTION___:${JSON.stringify(modalData)}\n`);
-            return false; // 終止後續管線，等待使用者決策
+            return false;
         }
 
-        // [智慧解析] 檢查 package.json 是否真的需要 build，並捕捉啟動指令
         const pkgPath = path.join(targetDir, 'package.json');
         let needsBuild = false;
-        let startCommand = 'node server.js'; // 預設降級啟動指令
+        let startCommand = 'node server.js';
 
         if (await fs.pathExists(pkgPath)) {
             const pkg = await fs.readJson(pkgPath);
@@ -156,7 +144,7 @@ CRITICAL Requirements to maximize token usage and quality:
             if (pkg.scripts && pkg.scripts.start) startCommand = 'npm start';
         }
 
-        let testPassed = true; // 預設為 true (假設不需要編譯的原生專案即為合格)
+        let testPassed = true;
 
         if (needsBuild) {
             console.log(`\n🧪 [System] Build script detected. Running compilation tests...`);
@@ -173,12 +161,8 @@ CRITICAL Requirements to maximize token usage and quality:
                         console.log(`⚠️ Max auto-repair attempts reached.`);
                         const isZh = lang === 'zh';
                         const modalData = {
-                            message: isZh
-                                ? "自動化測試 (Build) 失敗。請問您想怎麼處理？"
-                                : "The build test failed. How would you like to proceed?",
-                            options: isZh
-                                ? ["忽略錯誤，強行啟動專案。", "請 AI 幫我修復 Build 腳本或報錯。", "請 AI 解釋錯誤原因。"]
-                                : ["Ignore the error and force start.", "Ask AI to fix the build issue.", "Ask AI to explain the error."]
+                            message: isZh ? "自動化測試失敗。想怎麼處理？" : "Build failed. How to proceed?",
+                            options: isZh ? ["忽略錯誤", "請 AI 修復", "請 AI 解釋"] : ["Ignore", "Ask AI to fix", "Ask AI to explain"]
                         };
                         console.log(`\n___REVIEWER_ACTION___:${JSON.stringify(modalData)}\n`);
                         break;
@@ -190,36 +174,8 @@ CRITICAL Requirements to maximize token usage and quality:
             console.log(`\n⏩ [System] Native project detected (No build script). Skipping build phase.`);
         }
 
-        // 4. [UX 終極優化] 自動掛載並啟動子專案 (Port 3000 Isolation)
         if (testPassed) {
-            console.log(`\n🚀 [System] Auto-starting the generated project on PORT 3000...`);
-            const { spawn } = require('child_process');
-            const [cmd, ...args] = startCommand.split(' ');
-
-            try {
-                // 加入 shell: true 來解決 Windows 找不到 npm.cmd 的 ENOENT 錯誤
-                const child = spawn(cmd, args, {
-                    cwd: targetDir,
-                    env: { ...process.env, PORT: 3000 },
-                    detached: true,
-                    stdio: 'ignore',
-                    shell: process.platform === 'win32' // 🌟 跨平台核心修復點
-                });
-
-                // 捕捉子進程的非同步錯誤，防止主伺服器崩潰
-                child.on('error', (err) => {
-                    console.log(`\n\x1b[33m⚠️ [Warning] Auto-start failed (${err.message}). The generated project is safe, please start it manually.\x1b[0m`);
-                });
-
-                child.unref();
-            } catch (spawnErr) {
-                console.log(`\n\x1b[33m⚠️ [Warning] Could not spawn process: ${spawnErr.message}\x1b[0m`);
-            }
-
-            // ==========================================
-            // 👇 [新增] 5. 為小白生成「專屬一鍵啟動腳本」
-            // ==========================================
-            console.log(`🎁 [System] Generating Beginner-Friendly Start Script...`);
+            console.log(`\n🎁 [System] Generating Beginner-Friendly Start Script...`);
 
             let finalStartCmd = startCommand;
             if (startCommand === 'node server.js') {
@@ -229,8 +185,6 @@ CRITICAL Requirements to maximize token usage and quality:
             }
 
             const batPath = path.join(targetDir, 'Start_Project.bat');
-
-            // [終極防彈修復] 移除所有中文，確保 100% 英文 ASCII 兼容
             const rawBatContent = `@echo off
 title Running: ${path.basename(targetDir)}
 color 0A
@@ -250,28 +204,23 @@ echo [WARNING] The server process has stopped or crashed.
 echo [TIP] Check the error messages above, copy them, and use AI Magic Edit!
 pause`;
 
-            // [核心修復] 強制將所有 Linux 換行 (\n) 轉換為 Windows 換行 (\r\n)
             const safeBatContent = rawBatContent.replace(/\r?\n/g, '\r\n');
-
             await fs.outputFile(batPath, safeBatContent, 'utf8');
-            // ==========================================
-            console.log(`✅ Start_Project.bat created successfully!`);
-            // ==========================================
 
+            console.log(`\x1b[32m✅ Start_Project.bat created successfully!\x1b[0m`);
             console.log(`\n===========================================`);
-            console.log(`🎉 Project Successfully Deployed!`);
-            console.log(`👉 Click here to view: \x1b[36mhttp://localhost:3000\x1b[0m`);
-            console.log(`💡 Note: You can easily restart this project later by double-clicking 'Start_Project.bat' inside the folder.`);
+            console.log(`🎉 Project Successfully Crafted!`);
+            console.log(`👉 To view the app, click the green \x1b[32m[▶️ Run]\x1b[0m button in the UI above.`);
+            console.log(`💡 Or manually double-click 'Start_Project.bat' inside the project folder.`);
             console.log(`===========================================\n`);
         }
 
         return testPassed;
     }
 
-
     /**
-       * 高解析度代碼骨架提取器：捕捉箭頭函數與物件解構，確保匯出與匯入 100% 對齊
-       */
+     * 高解析度代碼骨架提取器 (已修復箭頭函數的正則問題！)
+     */
     static _extractCodeSkeleton(code) {
         if (!code) return "";
         const lines = code.split('\n');
@@ -284,20 +233,17 @@ pause`;
                 trimmed.startsWith('exports.') ||
                 trimmed.startsWith('const router =') ||
                 trimmed.includes('require(') ||
-                // [終極修復] 精準捕捉現代化的箭頭函數宣告 (const/let xxx = () =>)
-                (trimmed.startsWith('const ') && trimmed.includes('=')) ||
-                (trimmed.startsWith('let ') && trimmed.includes('='));
+                // [終極優化] 只捕捉帶有 '=>' 的箭頭函數，嚴禁捕捉長篇陣列資料！
+                (trimmed.startsWith('const ') && trimmed.includes('=>')) ||
+                (trimmed.startsWith('let ') && trimmed.includes('=>'));
         });
         return skeletonLines.join('\n');
     }
 
     /**
-     * 私有方法：呼叫工程師代理 (終極大一統版)
-     * 整合了：邏輯掛載、防禦性前端、嚴格對齊，以及高保真精準資料生成。
+     * 呼叫工程師代理 (終極大一統版)
      */
     static async _callCoder(filePath, fileRole, blueprint, description, apiKey, lang, rawMemory = "") {
-
-        // 格式化傳入的記憶體，確保 AI 能清楚區分這是系統給予的「長期與短期骨架記憶」
         let formattedMemoryPrompt = "";
         if (rawMemory && rawMemory.length > 5) {
             formattedMemoryPrompt = `\n[CRITICAL MEMORY: PROJECT AST SKELETON]\nHere is the structural skeleton of the files generated so far:\n${rawMemory}\nRULE: You MUST integrate your new code seamlessly with this existing architecture. Use EXACT function names and export styles shown above.`;
@@ -335,10 +281,9 @@ ${formattedMemoryPrompt}`;
         return response.data.choices[0].message.content.replace(/^```[\w-]*\n/i, '').replace(/```$/i, '').trim();
     }
 
-
     /**
-       * 階段 4：QA 審查與修復 (Chain-of-Thought 思維鏈除錯)
-       */
+     * 階段 4：QA 審查與修復 (Chain-of-Thought 思維鏈除錯)
+     */
     static async applyQAPatch(projectDir, message, apiKey) {
         console.log(`🧠 [QA Agent] Analyzing AST and formulating Chain-of-Thought reasoning...`);
 
@@ -380,20 +325,15 @@ NO markdown code blocks inside the <patch> tag.
             throw new Error("AI completely failed to generate the <patch> tag.");
         }
 
-        // 終極防彈 JSON 解析邏輯
         let jsonStr = patchMatch[1].trim();
-
-        // 清除開頭結尾可能的 Markdown 標籤 (例如 ```json 和 ```)
         jsonStr = jsonStr.replace(/^```[a-z]*\s*/i, '').replace(/\s*```$/i, '').trim();
 
         try {
-            // 嘗試直接解析
             const patchData = JSON.parse(jsonStr);
             console.log(`📝 [File Service] Applying AST Grafting for ${Object.keys(patchData).length} files...`);
             await FileService.applyPatch(projectDir, patchData);
             return true;
         } catch (parseErr) {
-            // 如果直接解析失敗，嘗試暴力定位大括號範圍
             const firstBrace = jsonStr.indexOf('{');
             const lastBrace = jsonStr.lastIndexOf('}');
             if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {

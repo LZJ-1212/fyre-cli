@@ -339,39 +339,106 @@
         const patchBtn = document.getElementById('patchBtn');
         const patchBox = document.getElementById('patchBox');
 
+        let animationInterval = null;
+        let lastLoggedChunk = ""; // 用於防止後端瘋狂噴出重複日誌的去重機制
+
+        // 核心打印引擎：支援去重、ANSI 顏色轉換、以及動態動畫替換
         function appendLog(text) {
-            terminal.innerHTML += text.replace(/\n/g, '<br>').replace(/\[31m/g, '<span style="color:#ef4444;">').replace(/\[32m/g, '<span style="color:#10b981;">').replace(/\[33m/g, '<span style="color:#f59e0b;">').replace(/\[35m/g, '<span style="color:#d946ef;">').replace(/\[36m/g, '<span style="color:#06b6d4;">').replace(/\[0m/g, '</span>');
+            // [UI 防彈去重] 如果後端發送了一模一樣的字串，直接丟棄！
+            if (text === lastLoggedChunk && text.trim().length > 5) return;
+            lastLoggedChunk = text;
+
+            // [徹底清除亂碼] 精準解析並過濾所有 \x1b 隱藏字元
+            let html = text
+                .replace(/\x1b\[31m/g, '<span style="color:#ef4444;">')
+                .replace(/\x1b\[32m/g, '<span style="color:#10b981;">')
+                .replace(/\x1b\[33m/g, '<span style="color:#f59e0b;">')
+                .replace(/\x1b\[35m/g, '<span style="color:#d946ef;">')
+                .replace(/\x1b\[36m/g, '<span style="color:#06b6d4;">')
+                .replace(/\x1b\[0m/g, '</span>')
+                .replace(/\x1b\[[0-9;]*m/g, '') // 捕捉任何殘留的顏色代碼
+                .replace(/\x1b/g, ''); // 徹底殺死導致 '' 的 ESC 字元
+
+            // [動畫觸發器] 偵測到開始寫檔案
+            if (html.includes('⏳') && html.includes('...')) {
+                // 將靜態的 ... 替換為我們專屬的動畫 span
+                html = html.replace('...', '<span id="loading-dots" style="font-weight:bold; letter-spacing:1px; color:#f59e0b;">.</span>');
+                startDotsAnimation();
+            }
+
+            // [動畫終結器] 偵測到寫檔完成或失敗
+            if (html.includes('✅ Done') || html.includes('❌ Failed')) {
+                stopDotsAnimation();
+                const dotsSpan = document.getElementById('loading-dots');
+                if (dotsSpan) {
+                    dotsSpan.outerHTML = '...'; // 將動畫凝固回靜態文字
+                }
+            }
+
+            html = html.replace(/\n/g, '<br>');
+            terminal.innerHTML += html;
             terminal.scrollTop = terminal.scrollHeight;
         }
 
+        function startDotsAnimation() {
+            stopDotsAnimation();
+            let count = 1;
+            animationInterval = setInterval(() => {
+                const el = document.getElementById('loading-dots');
+                if (el) {
+                    count = (count % 3) + 1;
+                    el.innerText = '.'.repeat(count);
+                } else {
+                    stopDotsAnimation(); // 元素被覆蓋或消失時自動停止
+                }
+            }, 300);
+        }
+
+        function stopDotsAnimation() {
+            if (animationInterval) {
+                clearInterval(animationInterval);
+                animationInterval = null;
+            }
+        }
+
+        // [核心升級] 無緩衝即時串流讀取器 (Unbuffered Live Reader)
         async function readStream(response) {
             const reader = response.body.getReader();
             const decoder = new TextDecoder("utf-8");
-            let buffer = "";
+            let actionBuffer = "";
 
             while (true) {
                 const { done, value } = await reader.read();
-                if (done) break;
-                buffer += decoder.decode(value, { stream: true });
-                let lines = buffer.split('\n');
-                buffer = lines.pop();
+                if (done) {
+                    stopDotsAnimation();
+                    break;
+                }
 
-                for (let line of lines) {
-                    if (line.includes('___REVIEWER_ACTION___:')) {
-                        const parts = line.split('___REVIEWER_ACTION___:');
-                        if (parts[0]) appendLog(parts[0] + '\n');
-                        try {
-                            const reviewData = JSON.parse(parts[1]);
-                            showReviewerModal(reviewData);
-                        } catch (e) {
-                            console.error("Failed to parse Reviewer JSON:", e);
-                        }
-                    } else {
-                        appendLog(line + '\n');
+                // 放棄換行等待，資料一來立刻解碼
+                const chunk = decoder.decode(value, { stream: true });
+                actionBuffer += chunk;
+
+                // 攔截並處理需要使用者互動的 Modal JSON
+                if (actionBuffer.includes('___REVIEWER_ACTION___:')) {
+                    const parts = actionBuffer.split('___REVIEWER_ACTION___:');
+                    if (parts[0]) appendLog(parts[0]);
+
+                    try {
+                        // 嘗試抓取 JSON 格式
+                        const jsonStr = parts[1].split('\n')[0].trim();
+                        const reviewData = JSON.parse(jsonStr);
+                        showReviewerModal(reviewData);
+                        actionBuffer = ""; // 清空 Buffer
+                    } catch (e) {
+                        // 如果 JSON 還沒傳完，等下一個 Chunk
+                        continue;
                     }
+                } else {
+                    // 一般日誌，直接無延遲推上 UI！
+                    appendLog(chunk);
+                    actionBuffer = "";
                 }
             }
-            if (buffer.length > 0) appendLog(buffer);
         }
 
         // 解鎖 AI 修改區的 UI 特效
@@ -388,15 +455,13 @@
                 alert("Please enter the exact Project Folder name you want to load.");
                 return;
             }
-            appendLog(`\n[36m📂 Scanning existing project [${folderName}]... Context loaded into AI memory.[0m\n`);
+            appendLog(`\n<span style="color:#06b6d4;">📂 Scanning existing project [${folderName}]... Context loaded into AI memory.</span>\n`);
             unlockPatching(folderName);
 
-            // 專案載入成功後，解鎖專屬的 Run 按鈕
             const runBtn = document.getElementById('runBtn');
             if (runBtn) runBtn.style.display = 'block';
         }
 
-        // 呼叫後端 API，一鍵喚醒專案並交由實體終端機處理
         async function runLoadedProject() {
             const projectDir = document.getElementById('outputDir').value.trim();
             if (!projectDir) return;
@@ -405,7 +470,7 @@
             runBtn.disabled = true;
             runBtn.innerText = "⏳...";
 
-            appendLog(`\n[36m🚀 Waking up project [${projectDir}]...[0m\n`);
+            appendLog(`\n<span style="color:#06b6d4;">🚀 Waking up project [${projectDir}]...</span>\n`);
             try {
                 const response = await fetch('/api/start', {
                     method: 'POST',
@@ -415,13 +480,12 @@
                 const data = await response.json();
 
                 if (data.success) {
-                    // 移除 window.open，避免瀏覽器閃退攔截！一切交給跳出來的終端機處理！
-                    appendLog(`[32m✅ Project boot initiated! A new green terminal window should appear.[0m\n`);
+                    appendLog(`<span style="color:#10b981;">✅ Project boot initiated! A new green terminal window should appear.</span>\n`);
                 } else {
-                    appendLog(`[31m❌ Failed to start: ${data.error}[0m\n`);
+                    appendLog(`<span style="color:#ef4444;">❌ Failed to start: ${data.error}</span>\n`);
                 }
             } catch (e) {
-                appendLog(`[31m❌ Connection error: ${e.message}[0m\n`);
+                appendLog(`<span style="color:#ef4444;">❌ Connection error: ${e.message}</span>\n`);
             } finally {
                 runBtn.disabled = false;
                 runBtn.innerText = "▶️ Run";
@@ -460,7 +524,7 @@
                 unlockPatching(outputDir || "your project");
 
             } catch (error) {
-                appendLog(`\n[31m❌ Connection Error: ${error.message}[0m`);
+                appendLog(`\n<span style="color:#ef4444;">❌ Connection Error: ${error.message}</span>`);
             } finally {
                 generateBtn.disabled = false;
                 generateBtn.classList.remove('pulse');
@@ -477,7 +541,7 @@
 
             patchBtn.disabled = true;
             patchMsg.value = '';
-            appendLog(`\n\n[35m✨ Submitting AI Edit Request: "${message}"...[0m\n`);
+            appendLog(`\n\n<span style="color:#d946ef;">✨ Submitting AI Edit Request: "${message}"...</span>\n`);
 
             try {
                 const response = await fetch('/api/modify', {
@@ -487,7 +551,7 @@
                 });
                 await readStream(response);
             } catch (error) {
-                appendLog(`\n[31m❌ Patch Failed: ${error.message}[0m`);
+                appendLog(`\n<span style="color:#ef4444;">❌ Patch Failed: ${error.message}</span>`);
             } finally {
                 patchBtn.disabled = false;
             }
@@ -504,7 +568,7 @@
                     btn.className = 'option-btn';
                     btn.innerText = `${String.fromCharCode(65 + idx)}. ${opt}`;
                     btn.onclick = () => {
-                        appendLog(`\n[36m🧑‍💻 User selected: ${opt}[0m\n`);
+                        appendLog(`\n<span style="color:#06b6d4;">🧑‍💻 User selected: ${opt}</span>\n`);
                         patchMsg.value = `I encountered an error. Please apply this solution: ${opt}`;
                         closeModal();
                         sendPatch();
@@ -519,7 +583,6 @@
             document.getElementById('reviewerModal').style.display = 'none';
         }
 
-        // 🌐 呼叫後端進行公網部署 (LocalTunnel 內網穿透)
         async function publishToWeb() {
             const publishBtn = document.getElementById('publishBtn');
             const publishUrl = document.getElementById('publishUrl');
@@ -529,7 +592,7 @@
 
             publishBtn.disabled = true;
             publishBtn.innerText = "⏳ Publishing...";
-            appendLog(`\n[36m🌐 Initiating Cloud Deployment for [${projectDir}]...[0m\n`);
+            appendLog(`\n<span style="color:#06b6d4;">🌐 Initiating Cloud Deployment for [${projectDir}]...</span>\n`);
 
             try {
                 const response = await fetch('/api/publish', {
@@ -541,12 +604,12 @@
 
                 if (data.url) {
                     publishUrl.innerHTML = `✅ Live URL: <a href="${data.url}" target="_blank" style="color: #06b6d4;">${data.url}</a><br><span style="font-size: 0.75rem; color:#94a3b8;">(Share this link with anyone!)</span>`;
-                    appendLog(`[32m✅ Deployment Successful! URL: ${data.url}[0m\n`);
+                    appendLog(`<span style="color:#10b981;">✅ Deployment Successful! URL: ${data.url}</span>\n`);
                 } else {
-                    appendLog(`[31m❌ Publishing failed: ${data.error}[0m\n`);
+                    appendLog(`<span style="color:#ef4444;">❌ Publishing failed: ${data.error}</span>\n`);
                 }
             } catch (err) {
-                appendLog(`[31m❌ Connection error: ${err.message}[0m\n`);
+                appendLog(`<span style="color:#ef4444;">❌ Connection error: ${err.message}</span>\n`);
             } finally {
                 publishBtn.innerText = "🌐 One-Click Publish to Web";
                 publishBtn.disabled = false;

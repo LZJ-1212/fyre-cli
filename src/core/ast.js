@@ -34,50 +34,33 @@ class ASTProcessor {
     }
 
     /**
-     * AST 精準嫁接器 (AST Grafter / Smart Patching)
-     * 將 AI 輸出的局部代碼片段，精準插入到原始大型檔案的對應語法樹節點中。
+     * AST 語法守門員與排版器 (Syntax Guard & Auto-Formatter)
+     * [重構] 放棄高風險的局部嫁接，改為「嚴格語法驗證」。
+     * 因為 AI 已經提供完整代碼，我們只需確保它沒有語法錯誤 (SyntaxError)。
      */
-    static injectASTNode(originalCode, aiPatchCode) {
+    static applyASTPatch(originalCode, newCode) {
         try {
-            const originalAst = parser.parse(originalCode, { sourceType: "module", plugins: ["jsx", "typescript"] });
-            const patchAst = parser.parse(aiPatchCode, { sourceType: "module", plugins: ["jsx", "typescript"] });
-
-            let newNodes = [];
-
-            // 提取 AI 補丁中的目標節點
-            traverse(patchAst, {
-                FunctionDeclaration(path) { newNodes.push(path.node); },
-                VariableDeclaration(path) {
-                    if (path.node.declarations[0].init?.type === 'ArrowFunctionExpression') newNodes.push(path.node);
-                }
+            // 1. 嚴格解析 AI 傳回的完整代碼
+            const newAst = parser.parse(newCode, {
+                sourceType: "module",
+                plugins: ["jsx", "typescript"]
             });
 
-            if (newNodes.length === 0) return originalCode;
-
-            let replaced = false;
-            // 在原始語法樹中尋找並替換
-            traverse(originalAst, {
-                FunctionDeclaration(path) {
-                    const match = newNodes.find(n => n.type === 'FunctionDeclaration' && n.id?.name === path.node.id?.name);
-                    if (match) { path.replaceWith(match); path.skip(); replaced = true; }
-                },
-                VariableDeclarator(path) {
-                    const match = newNodes.find(n => n.type === 'VariableDeclaration' && n.declarations[0].id?.name === path.node.id?.name);
-                    if (match && path.node.init?.type === 'ArrowFunctionExpression') {
-                        path.parentPath.replaceWith(match); path.skip(); replaced = true;
-                    }
-                }
-            });
-
-            if (!replaced) throw new Error("Target function node not found for replacement.");
-
-            return generator(originalAst, { retainLines: false }).code;
+            // 2. 如果解析成功，代表語法 100% 正確！沒有漏掉括號或引號。
+            // 順便透過 generator 進行標準化排版，確保程式碼風格統一。
+            return generator(newAst, { retainLines: false, compact: false }).code;
         } catch (err) {
-            console.warn(`\n\x1b[33m⚠️ AST Grafting failed: ${err.message}. Falling back to overwrite mode.\x1b[0m`);
+            // 如果 AI 寫出了 SyntaxError (例如意外斷氣、少一個括號)
+            console.warn(`\n\x1b[31m⚠️ [AST Guard] Rejected AI Patch: ${err.message}. Invalid syntax detected.\x1b[0m`);
+
+            // 返回 null，讓上游的 FileService 知道這段代碼有毒，拒絕覆寫！
             return null;
         }
     }
 
+    /**
+     * 私有方法：掏空函數區塊
+     */
     static _hollowOutBlock(path) {
         if (path.node.body && path.node.body.type === 'BlockStatement') {
             path.node.body.body = [];
@@ -86,7 +69,4 @@ class ASTProcessor {
     }
 }
 
-module.exports = {
-    extractCodeSkeleton: ASTProcessor.extractCodeSkeleton,
-    injectASTNode: ASTProcessor.injectASTNode
-};
+module.exports = ASTProcessor;

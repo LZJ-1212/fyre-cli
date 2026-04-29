@@ -1,5 +1,6 @@
 const express = require('express');
 const path = require('path');
+const fs = require('fs');
 const { exec } = require('child_process');
 const AIService = require('./services/aiService');
 const FileService = require('./services/fileService');
@@ -8,25 +9,35 @@ const app = express();
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
+// [核心修復] 使用全域變數鎖定機制，防止重複劫持導致的日誌倍增
+let isStreamingHijacked = false;
+let originalLog = console.log;
+let originalStdoutWrite = process.stdout.write.bind(process.stdout);
+
 /**
- * [Research Element] 終端機日誌串流劫持 (Log Stream Hijacking)
+ * 終極防彈日誌串流劫持器
  */
 function hijackStream(res) {
-  const originalLog = console.log;
-  const originalStdoutWrite = process.stdout.write.bind(process.stdout);
+  if (isStreamingHijacked) return () => { }; // 如果已經在劫持中，不重複處理
+
+  isStreamingHijacked = true;
 
   console.log = (...args) => {
-    res.write(args.join(' ') + '\n');
-    originalLog(...args);
+    const msg = args.join(' ') + '\n';
+    res.write(msg); // 發送到前端
+    originalLog(...args); // 同步印在實體終端機
   };
+
   process.stdout.write = (chunk) => {
     res.write(chunk.toString());
     originalStdoutWrite(chunk);
   };
 
+  // 返回還原函數
   return () => {
     console.log = originalLog;
     process.stdout.write = originalStdoutWrite;
+    isStreamingHijacked = false;
   };
 }
 
@@ -40,75 +51,49 @@ app.post('/api/generate', async (req, res) => {
   const restoreStream = hijackStream(res);
 
   try {
-    const key = await AIService.resolveApiKey(apiKey);
     const projectName = outputDir || AIService.generateProjectName(description);
-    const targetDir = path.resolve(process.cwd(), projectName);
+    const targetPath = path.resolve(process.cwd(), projectName);
 
     console.log(`\n===========================================`);
     console.log(`🌎 Initializing CodeCraft Agentic Pipeline`);
-    console.log(`🎯 Language Mode: ${lang === 'zh' ? 'Traditional Chinese' : 'English-First'}`);
+    console.log(`🎯 Language Mode: ${lang === 'zh' ? '繁體中文' : 'English-First'}`);
     console.log(`===========================================\n`);
 
-    const blueprint = await AIService.callArchitect(description, key, lang);
-    await AIService.executeGenerationPipeline(targetDir, blueprint, description, key, lang);
+    const blueprint = await AIService.callArchitect(description, apiKey, lang);
+    await AIService.executeGenerationPipeline(targetPath, blueprint, description, apiKey, lang);
 
   } catch (err) {
-    console.log(`\n\x1b[31m❌ System Crash: ${err.message}\x1b[0m`);
+    console.log(`\n\x1b[31m❌ Fatal Error: ${err.message}\x1b[0m`);
   } finally {
     restoreStream();
     res.end();
   }
 });
 
-// 🌐 API 2: AI 局部補丁修改 
+// 🌐 API 2: AI 魔法修復 (QA Agent)
 app.post('/api/modify', async (req, res) => {
   const { projectDir, message, apiKey } = req.body;
+  const targetPath = path.resolve(process.cwd(), projectDir || "");
+
   res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+  res.setHeader('Transfer-Encoding', 'chunked');
+
   const restoreStream = hijackStream(res);
 
   try {
-    console.log(`\n🧠 [QA Agent] Received patch request: "${message}"`);
-
-    // 呼叫我們剛剛在 AI Service 實作的思維鏈 (CoT) 深度除錯
-    const key = await AIService.resolveApiKey(apiKey);
-    await AIService.applyQAPatch(path.resolve(process.cwd(), projectDir), message, key);
-
-    console.log(`\x1b[32m✅ Patch applied successfully using AST Smart Grafting.\x1b[0m`);
-    restoreStream();
-    res.end();
+    await AIService.applyQAPatch(targetPath, message, apiKey);
+    console.log(`\n\x1b[32m✅ Patch applied successfully using AST Smart Grafting.\x1b[0m`);
   } catch (err) {
     console.log(`\n\x1b[31m❌ Patch Failed: ${err.message}\x1b[0m`);
+    console.log(`\x1b[33m💡 [Tip] 請嘗試再次點擊修復按鈕，讓 AI 重新嘗試。[0m\n`);
+  } finally {
     restoreStream();
     res.end();
   }
 });
 
-// 🌐 API 3: 一鍵部署公網 (Local Tunneling API)
-app.post('/api/publish', (req, res) => {
-  const { projectDir } = req.body;
-  const targetPath = path.resolve(process.cwd(), projectDir || "");
-
-  // 實作：利用 npx localtunnel 即時產生對外公網網址 (映射 8080 port)
-  exec('npx --yes localtunnel --port 8080', { cwd: targetPath }, (error, stdout, stderr) => {
-    if (error) {
-      return res.status(500).json({ error: error.message });
-    }
-    const urlMatch = stdout.match(/https:\/\/[^\s]+/);
-    if (urlMatch) {
-      res.json({ url: urlMatch[0] });
-    } else {
-      res.status(500).json({ error: "Failed to generate URL." });
-    }
-  });
-});
-
-// 🌐 API 4: 小白專用一鍵啟動 (Remote Execution API)
+// 🌐 API 3: 啟動生成好的專案 (實體視窗隔離模式)
 app.post('/api/start', async (req, res) => {
-  // 修正：將所有模組引入移至區塊最頂端，避開「暫時性死區 (TDZ)」
-  const fs = require('fs');
-  const path = require('path');
-  const { exec, spawn } = require('child_process');
-
   const { projectDir } = req.body;
   const targetPath = path.resolve(process.cwd(), projectDir || "");
 
@@ -116,36 +101,41 @@ app.post('/api/start', async (req, res) => {
     const batPath = path.join(targetPath, 'Start_Project.bat');
 
     if (fs.existsSync(batPath)) {
-      // 如果有我們為小白生成的啟動檔，直接呼叫 Windows 彈出實體視窗
+      // [核心修復] 僅使用 Windows start 指令彈出獨立視窗，徹底防止 Port 3000 被背景進程霸佔
       exec(`start "" "${batPath}"`, { cwd: targetPath });
+      res.json({ success: true });
     } else {
-      // 備用方案：背景啟動
-      let startCommand = 'node server.js';
-      const pkgPath = path.join(targetPath, 'package.json');
-      if (fs.existsSync(pkgPath)) {
-        const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
-        if (pkg.scripts && pkg.scripts.start) startCommand = 'npm start';
-      }
-      const [cmd, ...args] = startCommand.split(' ');
-      const child = spawn(cmd, args, {
-        cwd: targetPath, env: { ...process.env, PORT: 3000 },
-        detached: true, stdio: 'ignore', shell: process.platform === 'win32'
-      });
-      child.unref();
+      res.status(404).json({ error: "Start_Project.bat not found. Please regenerate." });
     }
-
-    res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-const PORT = process.env.PORT || 8080;
-app.listen(PORT, () => {
-  console.log(`\n✅ Core Services initialized successfully.`);
-  console.log(`🚀 Web Interface running at: http://localhost:${PORT}\n`);
+// 🌐 API 4: 公網發布 (LocalTunnel)
+app.post('/api/publish', async (req, res) => {
+  const { projectDir } = req.body;
+  const localtunnel = require('localtunnel');
 
-  // ✅ 這裡是你剛才漏掉的閉合括號與自動開啟瀏覽器的代碼
-  const startCmd = process.platform === 'win32' ? 'start' : process.platform === 'darwin' ? 'open' : 'xdg-open';
-  exec(`${startCmd} http://localhost:${PORT}`);
+  try {
+    const tunnel = await localtunnel({ port: 3000 });
+    console.log(`\n\x1b[36m🌐 Public Access Granted: ${tunnel.url}\x1b[0m`);
+    res.json({ url: tunnel.url });
+
+    tunnel.on('close', () => {
+      console.log('🌐 Public tunnel closed.');
+    });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to create tunnel: " + err.message });
+  }
+});
+
+const PORT = 8080;
+app.listen(PORT, () => {
+  console.log(`\n===================================================`);
+  console.log(`      🚀 Welcome to CodeCraft Agentic IDE 🚀`);
+  console.log(`===================================================`);
+  console.log(`\n[System] Booting up CodeCraft Agentic Workflow Engine...`);
+  console.log(`✅ Core Services initialized successfully.`);
+  console.log(`🚀 Web Interface running at: http://localhost:${PORT}\n`);
 });
