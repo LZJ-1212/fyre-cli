@@ -54,12 +54,14 @@ class AIService {
         // [進階系統設計] 企業級架構師提示詞：強制引入資料庫與現代化 UI 框架
         const architectPrompt = `You are an elite Enterprise Software Architect. Design a PRODUCTION-READY, Deployment-Grade Full-Stack architecture based on the user's description.
 CRITICAL Requirements to maximize token usage and quality:
-1. DATABASE MANDATORY: You MUST design a persistent data layer using Node.js, Express, and SQLite (e.g., using 'sqlite3' or an ORM). The blueprint MUST include database initialization scripts (e.g., database/init.js or schema.sql) and distinct Model/Controller files.
-2. MODERN UI MANDATORY: The frontend MUST NOT be basic HTML. You MUST plan for a modern UI utilizing Tailwind CSS (via CDN is acceptable) or advanced CSS modular design. Include files for responsive layouts, navigation bars, and interactive components.
-3. SOPHISTICATION: Break down the system into Micro-components. Instead of one massive server.js, design routes, controllers, and services directories.
-4. ONLY output a pure JSON object where keys are file paths and values are comprehensive duty descriptions.
-5. NO Markdown tags. NO empty directories.
-6. ${getLangInstruction(lang)}`;
+1. REAL IMAGES CAPABILITY (NO PLACEHOLDERS): You MUST design a Backend API route (e.g., /api/images) that fetches real images from public APIs. The frontend MUST use this to render REAL images.
+2. MULTI-PAGE REQUIREMENT: DO NOT build a single-page application (SPA) unless specifically asked. You MUST design a multi-page structure (e.g., index.html, detail.html, about.html) with proper navigation links between them.
+3. FRONTEND SIMPLICITY: You MUST use Vanilla HTML/JS/CSS for the frontend. Place frontend files directly in 'public/'.
+4. DATABASE MANDATORY: You MUST design a persistent data layer using Node.js + Express + standard 'sqlite3' (NO 'better-sqlite3'). Include init scripts and Model/Controller files.
+5. MODERN UI MANDATORY: Plan a modern UI utilizing Tailwind CSS. Include CSS files, JS utility files, and distinct HTML pages.
+6. ONLY output a pure JSON object where keys are file paths and values are comprehensive duty descriptions.
+7. NO Markdown tags. NO empty directories.
+8. ${getLangInstruction(lang)}`;
 
         const response = await axios.post('https://api.deepseek.com/v1/chat/completions', {
             model: 'deepseek-chat',
@@ -96,14 +98,25 @@ CRITICAL Requirements to maximize token usage and quality:
             }
         }
 
-        // 2. 工程師代理生成檔案 (這段是你剛才不小心刪掉的，我把它加回來並傳入記憶)
+        // 2. 工程師代理生成檔案 (導入動態記憶體池架構)
         let count = 1;
+        let dynamicMemory = {}; // 存放本次生成過程中，剛寫好的檔案骨架
+
         for (const [filePath, fileRole] of Object.entries(blueprint)) {
             process.stdout.write(`⏳ (${count}/${fileNames.length}) Crafting ${filePath} ... `);
             try {
-                // 注意這裡多傳入了一個 existingContext
-                const code = await this._callCoder(filePath, fileRole, blueprint, description, apiKey, lang, existingContext);
+                // 將「長期記憶 (舊檔案)」與「短期記憶 (剛生成的檔案)」合併
+                let combinedContext = existingContext || "";
+                if (Object.keys(dynamicMemory).length > 0) {
+                    combinedContext += `\n\n[CRITICAL MEMORY: FILES JUST GENERATED IN THIS SESSION]\n${JSON.stringify(dynamicMemory, null, 2)}`;
+                }
+
+                const code = await this._callCoder(filePath, fileRole, blueprint, description, apiKey, lang, combinedContext);
                 await fs.outputFile(path.join(targetDir, filePath), code, 'utf8');
+
+                // [核心邏輯] 寫完檔案後，立刻提取骨架並存入動態記憶體
+                dynamicMemory[filePath] = this._extractCodeSkeleton(code);
+
                 console.log(`\x1b[32m✅ Done\x1b[0m`);
             } catch (err) {
                 console.log(`\x1b[31m❌ Failed: ${err.message}\x1b[0m`);
@@ -111,71 +124,206 @@ CRITICAL Requirements to maximize token usage and quality:
             count++;
         }
 
-        // 3. 自動化測試與 QA 自癒防護網 (QA Self-Healing Loop)
+        // 3. 智慧依賴安裝與 QA 測試管線 (Smart Build Resolution)
         console.log(`\n📦 [System] Installing dependencies (npm install)...`);
-        await FileService.runCommand('npm', ['install'], targetDir);
+        try {
+            await FileService.runCommand('npm', ['install'], targetDir);
+        } catch (installErr) {
+            console.log(`\x1b[31m❌ [System] npm install failed: Dependency compilation error.\x1b[0m`);
 
-        console.log(`\n🧪 [System] Running compilation tests (npm run build)...`);
-        let testPassed = false;
+            const isZh = lang === 'zh';
+            const modalData = {
+                message: isZh
+                    ? "依賴套件安裝失敗 (npm install)！這通常是因為 AI 選擇了需要 Windows C++ (node-gyp) 編譯的底層套件。請問要如何處理？"
+                    : "Dependency installation failed! This is usually because the AI chose a native package requiring Windows C++ tools (node-gyp). How to proceed?",
+                options: isZh
+                    ? ["請 AI 改用不需要 C++ 編譯的輕量級資料庫 (如純 sqlite3 或 JSON)", "強行略過安裝並嘗試啟動伺服器", "請 AI 分析這段報錯"]
+                    : ["Ask AI to rewrite using a lightweight database without C++ dependencies", "Force skip install and try to start", "Ask AI to analyze the error"]
+            };
 
-        for (let attempt = 1; attempt <= 2; attempt++) {
-            try {
-                await FileService.runCommand('npm', ['run', 'build'], targetDir);
-                console.log(`\x1b[32m✅ [QA] Test passed on attempt ${attempt}! Project is robust.\x1b[0m`);
-                testPassed = true;
-                break;
-            } catch (error) {
-                console.log(`\x1b[31m❌ [QA] Build failed! Initiating debugging sequence...\x1b[0m`);
-                if (attempt === 2) {
-                    console.log(`⚠️ Max auto-repair attempts reached.`);
-
-                    // [UX 優化] 觸發前端的 QA 決策視窗 (Reviewer Modal)
-                    const isZh = lang === 'zh';
-                    const modalData = {
-                        message: isZh
-                            ? "AI 已成功生成所有代碼，但自動化測試 (Build) 失敗了。這通常是因為原生 Node/HTML 專案不需要編譯。請問您想怎麼做？"
-                            : "The AI successfully generated the code, but the build test failed (Native Node/HTML projects usually don't need building). How would you like to proceed?",
-                        options: isZh
-                            ? ["忽略錯誤，我已經可以開始使用這個專案了。", "請 AI 幫我加上對應的 Build 腳本。", "請 AI 用白話文解釋剛才的錯誤日誌。"]
-                            : ["Ignore the error. The project is ready to use.", "Ask AI to add a valid build script.", "Ask AI to explain the error in simple terms."]
-                    };
-
-                    console.log(`\n___REVIEWER_ACTION___:${JSON.stringify(modalData)}\n`);
-                    break;
-                }
-                console.log(`🧠 [QA Agent] Analyzing logs and writing patches...`);
-            }
+            console.log(`\n___REVIEWER_ACTION___:${JSON.stringify(modalData)}\n`);
+            return false; // 終止後續管線，等待使用者決策
         }
+
+        // [智慧解析] 檢查 package.json 是否真的需要 build，並捕捉啟動指令
+        const pkgPath = path.join(targetDir, 'package.json');
+        let needsBuild = false;
+        let startCommand = 'node server.js'; // 預設降級啟動指令
+
+        if (await fs.pathExists(pkgPath)) {
+            const pkg = await fs.readJson(pkgPath);
+            if (pkg.scripts && pkg.scripts.build) needsBuild = true;
+            if (pkg.scripts && pkg.scripts.start) startCommand = 'npm start';
+        }
+
+        let testPassed = true; // 預設為 true (假設不需要編譯的原生專案即為合格)
+
+        if (needsBuild) {
+            console.log(`\n🧪 [System] Build script detected. Running compilation tests...`);
+            testPassed = false;
+            for (let attempt = 1; attempt <= 2; attempt++) {
+                try {
+                    await FileService.runCommand('npm', ['run', 'build'], targetDir);
+                    console.log(`\x1b[32m✅ [QA] Test passed on attempt ${attempt}!\x1b[0m`);
+                    testPassed = true;
+                    break;
+                } catch (error) {
+                    console.log(`\x1b[31m❌ [QA] Build failed! Initiating debugging sequence...\x1b[0m`);
+                    if (attempt === 2) {
+                        console.log(`⚠️ Max auto-repair attempts reached.`);
+                        const isZh = lang === 'zh';
+                        const modalData = {
+                            message: isZh
+                                ? "自動化測試 (Build) 失敗。請問您想怎麼處理？"
+                                : "The build test failed. How would you like to proceed?",
+                            options: isZh
+                                ? ["忽略錯誤，強行啟動專案。", "請 AI 幫我修復 Build 腳本或報錯。", "請 AI 解釋錯誤原因。"]
+                                : ["Ignore the error and force start.", "Ask AI to fix the build issue.", "Ask AI to explain the error."]
+                        };
+                        console.log(`\n___REVIEWER_ACTION___:${JSON.stringify(modalData)}\n`);
+                        break;
+                    }
+                    console.log(`🧠 [QA Agent] Analyzing logs and writing patches...`);
+                }
+            }
+        } else {
+            console.log(`\n⏩ [System] Native project detected (No build script). Skipping build phase.`);
+        }
+
+        // 4. [UX 終極優化] 自動掛載並啟動子專案 (Port 3000 Isolation)
+        if (testPassed) {
+            console.log(`\n🚀 [System] Auto-starting the generated project on PORT 3000...`);
+            const { spawn } = require('child_process');
+            const [cmd, ...args] = startCommand.split(' ');
+
+            try {
+                // 加入 shell: true 來解決 Windows 找不到 npm.cmd 的 ENOENT 錯誤
+                const child = spawn(cmd, args, {
+                    cwd: targetDir,
+                    env: { ...process.env, PORT: 3000 },
+                    detached: true,
+                    stdio: 'ignore',
+                    shell: process.platform === 'win32' // 🌟 跨平台核心修復點
+                });
+
+                // 捕捉子進程的非同步錯誤，防止主伺服器崩潰
+                child.on('error', (err) => {
+                    console.log(`\n\x1b[33m⚠️ [Warning] Auto-start failed (${err.message}). The generated project is safe, please start it manually.\x1b[0m`);
+                });
+
+                child.unref();
+            } catch (spawnErr) {
+                console.log(`\n\x1b[33m⚠️ [Warning] Could not spawn process: ${spawnErr.message}\x1b[0m`);
+            }
+
+            // ==========================================
+            // 👇 [新增] 5. 為小白生成「專屬一鍵啟動腳本」
+            // ==========================================
+            console.log(`🎁 [System] Generating Beginner-Friendly Start Script...`);
+
+            let finalStartCmd = startCommand;
+            if (startCommand === 'node server.js') {
+                if (await fs.pathExists(path.join(targetDir, 'server/index.js'))) finalStartCmd = 'node server/index.js';
+                else if (await fs.pathExists(path.join(targetDir, 'server.js'))) finalStartCmd = 'node server.js';
+                else if (await fs.pathExists(path.join(targetDir, 'index.js'))) finalStartCmd = 'node index.js';
+            }
+
+            const batPath = path.join(targetDir, 'Start_Project.bat');
+
+            // [終極防彈修復] 移除所有中文，確保 100% 英文 ASCII 兼容
+            const rawBatContent = `@echo off
+title Running: ${path.basename(targetDir)}
+color 0A
+echo ===================================================
+echo   Welcome to your AI-Generated Project!
+echo ===================================================
+echo.
+echo [System] Starting local server on PORT 3000...
+echo [System] If the app crashes, the error will stay on this screen!
+echo.
+set PORT=3000
+start http://localhost:3000
+:: Use call to ensure control returns and window does not crash
+call ${finalStartCmd}
+echo.
+echo [WARNING] The server process has stopped or crashed.
+echo [TIP] Check the error messages above, copy them, and use AI Magic Edit!
+pause`;
+
+            // [核心修復] 強制將所有 Linux 換行 (\n) 轉換為 Windows 換行 (\r\n)
+            const safeBatContent = rawBatContent.replace(/\r?\n/g, '\r\n');
+
+            await fs.outputFile(batPath, safeBatContent, 'utf8');
+            // ==========================================
+            console.log(`✅ Start_Project.bat created successfully!`);
+            // ==========================================
+
+            console.log(`\n===========================================`);
+            console.log(`🎉 Project Successfully Deployed!`);
+            console.log(`👉 Click here to view: \x1b[36mhttp://localhost:3000\x1b[0m`);
+            console.log(`💡 Note: You can easily restart this project later by double-clicking 'Start_Project.bat' inside the folder.`);
+            console.log(`===========================================\n`);
+        }
+
         return testPassed;
     }
 
-    /**
-     * 私有方法：呼叫工程師代理 (注入了專案記憶)
-     */
-    static async _callCoder(filePath, fileRole, blueprint, description, apiKey, lang, existingContext) {
 
-        // 動態組裝記憶區塊
-        let memoryPrompt = "";
-        if (existingContext && existingContext.length > 5) {
-            memoryPrompt = `
-[CRITICAL: LONG-TERM PROJECT MEMORY (AST Skeleton)]
-The user has an existing codebase. Here is the structural skeleton of their current files:
-${existingContext}
-RULE: You MUST integrate your new code seamlessly with this existing architecture. Do NOT overwrite existing business logic blindly. Extend and enhance it.`;
+    /**
+       * 高解析度代碼骨架提取器：捕捉箭頭函數與物件解構，確保匯出與匯入 100% 對齊
+       */
+    static _extractCodeSkeleton(code) {
+        if (!code) return "";
+        const lines = code.split('\n');
+        const skeletonLines = lines.filter(line => {
+            const trimmed = line.trim();
+            return trimmed.startsWith('export ') ||
+                trimmed.startsWith('function ') ||
+                trimmed.startsWith('class ') ||
+                trimmed.startsWith('module.exports') ||
+                trimmed.startsWith('exports.') ||
+                trimmed.startsWith('const router =') ||
+                trimmed.includes('require(') ||
+                // [終極修復] 精準捕捉現代化的箭頭函數宣告 (const/let xxx = () =>)
+                (trimmed.startsWith('const ') && trimmed.includes('=')) ||
+                (trimmed.startsWith('let ') && trimmed.includes('='));
+        });
+        return skeletonLines.join('\n');
+    }
+
+    /**
+     * 私有方法：呼叫工程師代理 (終極大一統版)
+     * 整合了：邏輯掛載、防禦性前端、嚴格對齊，以及高保真精準資料生成。
+     */
+    static async _callCoder(filePath, fileRole, blueprint, description, apiKey, lang, rawMemory = "") {
+
+        // 格式化傳入的記憶體，確保 AI 能清楚區分這是系統給予的「長期與短期骨架記憶」
+        let formattedMemoryPrompt = "";
+        if (rawMemory && rawMemory.length > 5) {
+            formattedMemoryPrompt = `\n[CRITICAL MEMORY: PROJECT AST SKELETON]\nHere is the structural skeleton of the files generated so far:\n${rawMemory}\nRULE: You MUST integrate your new code seamlessly with this existing architecture. Use EXACT function names and export styles shown above.`;
         }
 
-        const coderPrompt = `You are a Senior Enterprise Full-Stack Engineer.
+        const coderPrompt = `You are a Senior Enterprise Full-Stack Engineer who specializes in 100% WORKING applications.
 Project Context: ${description}
 Blueprint: ${JSON.stringify(blueprint)}
 Current Task: Write the EXACT, PRODUCTION-READY code for \`${filePath}\` (Duty: ${fileRole}).
-${memoryPrompt}
 
-CRITICAL Rules for Maximum Quality:
-1. NO PLACEHOLDERS: Do NOT use comments like "Add logic here". You MUST write every single line of real, working logic. Exhaust your token limit.
-2. DATABASE CONNECTIVITY: If writing backend code, implement REAL database queries (SQL/SQLite) with robust Try/Catch.
-3. STUNNING UI/UX: If writing frontend code, you MUST utilize Tailwind CSS utility classes to create a beautiful, modern, responsive UI.
-4. NO Markdown tags. Pure code ONLY.
-5. ${getLangInstruction(lang)}`;
+CRITICAL RULES FOR "ZERO-KNOWLEDGE" USER SUCCESS:
+1. ZERO PLACEHOLDERS: NEVER use comments like "// logic goes here". Write 100% working, dense JavaScript logic.
+2. FULL INTERACTIVITY & AUTO-WIRING: 
+   - HTML: Include all necessary <script> and <link> tags connecting to the blueprint's files.
+   - JS: Every button/input ID in the HTML MUST have a working EventListener. Forms MUST submit.
+3. DEFENSIVE FRONTEND (NO FROZEN UI): Wrap fetch() calls in try/catch. If API fails, immediately fallback to hardcoded Mock Data to prevent perpetual loading spinners.
+4. EXACT DATA WIRING (HIGH FIDELITY REQUIRED): DO NOT generate garbage data (e.g., "Test Item 1") or use random loops to mix attributes. 
+   - Define an array of exact JSON objects with paired, accurate data (e.g., \`[{title: 'My AI Project', desc: 'Agentic Workflow', imagePath: '/images/project1.jpg'}]\`).
+   - Use standard local paths for personal portfolios so users can easily replace them.
+   - Use a short loop to execute parameterized SQL inserts for this array. Limit to 10-15 high-quality, perfectly accurate items to prevent token truncation.
+5. REAL ASSETS: Do NOT use fake placeholder URLs. Use dynamic URLs from public APIs or local paths as required.
+6. STRICT ALIGNMENT: Read the [CRITICAL MEMORY] section below. Do NOT hallucinate function names.
+7. EXHAUST YOUR TOKENS: Output the full file. Do not omit any logic.
+8. NO Markdown tags. Pure code ONLY.
+9. ${getLangInstruction(lang)}
+${formattedMemoryPrompt}`;
 
         const response = await axios.post('https://api.deepseek.com/v1/chat/completions', {
             model: 'deepseek-chat',
@@ -187,41 +335,13 @@ CRITICAL Rules for Maximum Quality:
         return response.data.choices[0].message.content.replace(/^```[\w-]*\n/i, '').replace(/```$/i, '').trim();
     }
 
-    /**
-     * 私有方法：呼叫工程師代理
-     */
-    static async _callCoder(filePath, fileRole, blueprint, description, apiKey, lang) {
-        // [極限代碼生成] 企業級工程師提示詞：強制高保真 UI、真實資料庫連接與零縮寫代碼
-        const coderPrompt = `You are a Senior Enterprise Full-Stack Engineer.
-Project Context: ${description}
-Blueprint: ${JSON.stringify(blueprint)}
-Current Task: Write the EXACT, PRODUCTION-READY code for \`${filePath}\` (Duty: ${fileRole}).
-
-CRITICAL Rules for Maximum Quality:
-1. NO PLACEHOLDERS: Do NOT use comments like "Add logic here" or "Implementation goes here". You MUST write every single line of real, working logic. Exhaust your maximum token limit to ensure completeness.
-2. DATABASE CONNECTIVITY: If writing backend code, implement REAL database queries (SQL/SQLite) with robust Try/Catch error handling and input validation.
-3. STUNNING UI/UX: If writing frontend code (HTML/JS/CSS), you MUST utilize Tailwind CSS utility classes (assume Tailwind CDN is included) to create a beautiful, modern, responsive, and visually impressive user interface with hover effects and transitions. Do NOT output ugly default browser styles.
-4. NO Markdown tags. Pure code ONLY. Do NOT wrap code in \`\`\`javascript or similar tags.
-5. ${getLangInstruction(lang)}`;
-
-        const response = await axios.post('https://api.deepseek.com/v1/chat/completions', {
-            model: 'deepseek-chat',
-            messages: [{ role: 'system', content: coderPrompt }, { role: 'user', content: `Output code for ${filePath}` }],
-            temperature: 0.1,
-            max_tokens: 8192
-        }, { headers: { Authorization: `Bearer ${apiKey}` } });
-
-        return response.data.choices[0].message.content.replace(/^```[\w-]*\n/i, '').replace(/```$/i, '').trim();
-    }
 
     /**
-     * 階段 4：QA 審查與修復 (Chain-of-Thought 思維鏈除錯)
-     * [How] 強迫 AI 遵循 <thought_process> 分析錯誤原因，逼迫其進行深度推理，解決 Bug 修復不完整的痛點。
-     */
+       * 階段 4：QA 審查與修復 (Chain-of-Thought 思維鏈除錯)
+       */
     static async applyQAPatch(projectDir, message, apiKey) {
         console.log(`🧠 [QA Agent] Analyzing AST and formulating Chain-of-Thought reasoning...`);
 
-        // 讀取目前的程式碼骨架作為上下文
         const filesMap = await FileService.readProjectFiles(projectDir);
         const existingContext = JSON.stringify(filesMap);
 
@@ -229,17 +349,16 @@ CRITICAL Rules for Maximum Quality:
 Project Context: The user reported an issue or requested a change: "${message}"
 Current Codebase Skeleton: ${existingContext}
 
-CRITICAL DEBUGGING RULES (Chain-of-Thought):
-You MUST NOT just output code. You MUST exhaust your reasoning token limit by strictly following this format:
-
+CRITICAL DEBUGGING RULES:
 <thought_process>
-1. Error/Request Analysis: Break down exactly what the user wants or why it failed.
-2. Root Cause: Identify the missing module, syntax error, or logic flaw in the current context.
-3. Action Plan: State the precise file paths and lines you will modify.
+1. Analyze exactly what failed.
+2. Identify the root cause.
+3. List exact files and fixes.
 </thought_process>
 
 <patch>
-Provide the pure JSON object mapping file paths to their COMPLETE fixed code. Do not use markdown tags outside the JSON.
+Provide ONLY a valid JSON object. Keys are file paths, values are the FULL FIXED CODE.
+NO markdown code blocks inside the <patch> tag.
 </patch>`;
 
         const response = await axios.post('https://api.deepseek.com/v1/chat/completions', {
@@ -251,23 +370,45 @@ Provide the pure JSON object mapping file paths to their COMPLETE fixed code. Do
 
         const content = response.data.choices[0].message.content;
 
-        // 提取思維鏈，並將 AI 的思考過程實時印在終端機給小白看
-        const thoughtMatch = content.match(/<thought_process>([\s\S]*?)<\/thought_process>/);
+        const thoughtMatch = content.match(/<thought_process>([\s\S]*?)<\/thought_process>/i);
         if (thoughtMatch) {
             console.log(`\n\x1b[36m💡 [QA AI Thinking Process]:\n${thoughtMatch[1].trim()}\x1b[0m\n`);
         }
 
-        // 提取實際的代碼補丁並進行 AST 嫁接
-        const patchMatch = content.match(/<patch>([\s\S]*?)<\/patch>/);
-        if (patchMatch) {
-            const patchJsonStr = patchMatch[1].substring(patchMatch[1].indexOf('{'), patchMatch[1].lastIndexOf('}') + 1);
-            const patchData = JSON.parse(patchJsonStr);
+        const patchMatch = content.match(/<patch>([\s\S]*?)<\/patch>/i);
+        if (!patchMatch) {
+            throw new Error("AI completely failed to generate the <patch> tag.");
+        }
 
+        // 終極防彈 JSON 解析邏輯
+        let jsonStr = patchMatch[1].trim();
+
+        // 清除開頭結尾可能的 Markdown 標籤 (例如 ```json 和 ```)
+        jsonStr = jsonStr.replace(/^```[a-z]*\s*/i, '').replace(/\s*```$/i, '').trim();
+
+        try {
+            // 嘗試直接解析
+            const patchData = JSON.parse(jsonStr);
             console.log(`📝 [File Service] Applying AST Grafting for ${Object.keys(patchData).length} files...`);
             await FileService.applyPatch(projectDir, patchData);
             return true;
-        } else {
-            throw new Error("AI failed to generate a valid patch format.");
+        } catch (parseErr) {
+            // 如果直接解析失敗，嘗試暴力定位大括號範圍
+            const firstBrace = jsonStr.indexOf('{');
+            const lastBrace = jsonStr.lastIndexOf('}');
+            if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+                try {
+                    const extractedJson = jsonStr.substring(firstBrace, lastBrace + 1);
+                    const patchData = JSON.parse(extractedJson);
+                    console.log(`📝 [File Service] Applying AST Grafting for ${Object.keys(patchData).length} files...`);
+                    await FileService.applyPatch(projectDir, patchData);
+                    return true;
+                } catch (fallbackErr) {
+                    console.error("Extracted JSON:", extractedJson);
+                    throw new Error("JSON syntax is fundamentally broken by AI.");
+                }
+            }
+            throw new Error("Failed to parse AI JSON format. AI outputted invalid syntax.");
         }
     }
 }

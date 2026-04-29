@@ -102,6 +102,44 @@ app.post('/api/publish', (req, res) => {
   });
 });
 
+// 🌐 API 4: 小白專用一鍵啟動 (Remote Execution API)
+app.post('/api/start', async (req, res) => {
+  // 修正：將所有模組引入移至區塊最頂端，避開「暫時性死區 (TDZ)」
+  const fs = require('fs');
+  const path = require('path');
+  const { exec, spawn } = require('child_process');
+
+  const { projectDir } = req.body;
+  const targetPath = path.resolve(process.cwd(), projectDir || "");
+
+  try {
+    const batPath = path.join(targetPath, 'Start_Project.bat');
+
+    if (fs.existsSync(batPath)) {
+      // 如果有我們為小白生成的啟動檔，直接呼叫 Windows 彈出實體視窗
+      exec(`start "" "${batPath}"`, { cwd: targetPath });
+    } else {
+      // 備用方案：背景啟動
+      let startCommand = 'node server.js';
+      const pkgPath = path.join(targetPath, 'package.json');
+      if (fs.existsSync(pkgPath)) {
+        const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+        if (pkg.scripts && pkg.scripts.start) startCommand = 'npm start';
+      }
+      const [cmd, ...args] = startCommand.split(' ');
+      const child = spawn(cmd, args, {
+        cwd: targetPath, env: { ...process.env, PORT: 3000 },
+        detached: true, stdio: 'ignore', shell: process.platform === 'win32'
+      });
+      child.unref();
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {
   console.log(`\n✅ Core Services initialized successfully.`);

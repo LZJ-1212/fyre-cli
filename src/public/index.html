@@ -258,6 +258,9 @@
                 <input type="text" id="outputDir" placeholder="Leave blank to let AI decide...">
                 <button class="btn-secondary" onclick="loadExistingProject()"
                     title="Load a previous project to modify it">📂 Load</button>
+                <button id="runBtn" onclick="runLoadedProject()"
+                    style="background: #10b981; display: none; padding: 10px;" title="Start this project in browser">▶️
+                    Run</button>
             </div>
         </div>
 
@@ -379,7 +382,6 @@
             patchMsg.placeholder = `💬 Tell AI what to change in [${projectName}] (e.g. Add a shopping cart)...`;
         }
 
-        // [新增功能] 載入舊專案
         function loadExistingProject() {
             const folderName = document.getElementById('outputDir').value.trim();
             if (!folderName) {
@@ -388,6 +390,42 @@
             }
             appendLog(`\n[36m📂 Scanning existing project [${folderName}]... Context loaded into AI memory.[0m\n`);
             unlockPatching(folderName);
+
+            // 專案載入成功後，解鎖專屬的 Run 按鈕
+            const runBtn = document.getElementById('runBtn');
+            if (runBtn) runBtn.style.display = 'block';
+        }
+
+        // 呼叫後端 API，一鍵喚醒專案並交由實體終端機處理
+        async function runLoadedProject() {
+            const projectDir = document.getElementById('outputDir').value.trim();
+            if (!projectDir) return;
+
+            const runBtn = document.getElementById('runBtn');
+            runBtn.disabled = true;
+            runBtn.innerText = "⏳...";
+
+            appendLog(`\n[36m🚀 Waking up project [${projectDir}]...[0m\n`);
+            try {
+                const response = await fetch('/api/start', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ projectDir })
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    // 移除 window.open，避免瀏覽器閃退攔截！一切交給跳出來的終端機處理！
+                    appendLog(`[32m✅ Project boot initiated! A new green terminal window should appear.[0m\n`);
+                } else {
+                    appendLog(`[31m❌ Failed to start: ${data.error}[0m\n`);
+                }
+            } catch (e) {
+                appendLog(`[31m❌ Connection error: ${e.message}[0m\n`);
+            } finally {
+                runBtn.disabled = false;
+                runBtn.innerText = "▶️ Run";
+            }
         }
 
         async function generateProject() {

@@ -69,4 +69,8 @@ echo.
 :: Standardized entry point for the Web GUI
 node src/server.js
 
-pause
+:: 如果伺服器意外崩潰，不允許視窗關閉，而是保留在命令列狀態供小白查看報錯
+echo.
+echo [⚠️ System] The CodeCraft Engine has stopped.
+echo [💡 Tip] You can type "node src/server.js" to restart it manually.
+cmd /k
