@@ -10,46 +10,17 @@ const app = express();
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// [核心修復] 移除 console.log 的劫持，只保留底層 stdout 攔截，徹底消滅雙重回音！
-let isStreamingHijacked = false;
-let originalStdoutWrite = process.stdout.write.bind(process.stdout);
-
-/**
- * 終極防彈日誌串流劫持器 (純淨無回音版)
- */
-function hijackStream(res) {
-  if (isStreamingHijacked) return () => { };
-
-  isStreamingHijacked = true;
-
-  // 唯一攔截點：因為所有的 console.log 最終都會流過這裡
-  process.stdout.write = (chunk, encoding, callback) => {
-    if (typeof chunk === 'string') {
-      res.write(chunk);
-    } else if (Buffer.isBuffer(chunk)) {
-      res.write(chunk.toString('utf8'));
-    }
-    return originalStdoutWrite(chunk, encoding, callback);
-  };
-
-  // 返回還原函數
-  return () => {
-    process.stdout.write = originalStdoutWrite;
-    isStreamingHijacked = false;
-  };
-}
-
 // --- [實機演示核心：圖片自動獲取邏輯] ---
 app.get('/api/get-image', (req, res) => {
-    const { q } = req.query;
-    // 如果 AI 沒給關鍵字，就給一張隨機風景圖
-    if (!q) return res.redirect('https://picsum.photos/800/600');
+  const { q } = req.query;
+  // 如果 AI 沒給關鍵字，就給一張隨機風景圖
+  if (!q) return res.redirect('https://picsum.photos/800/600');
 
-    // 關鍵：將 AI 生成的關鍵字轉發給 LoremFlickr (目前最穩定的免費圖庫)
-    const targetUrl = `https://loremflickr.com/800/600/${encodeURIComponent(q)}`;
-    
-    console.log(`\n🖼️ [Asset Discovery] Redirecting request for [${q}] to real asset...`);
-    res.redirect(targetUrl);
+  // 關鍵：將 AI 生成的關鍵字轉發給 LoremFlickr (目前最穩定的免費圖庫)
+  const targetUrl = `https://loremflickr.com/800/600/${encodeURIComponent(q)}`;
+
+  console.log(`\n🖼️ [Asset Discovery] Redirecting request for [${q}] to real asset...`);
+  res.redirect(targetUrl);
 });
 
 // 🌐 API 1: 啟動多代理協作生成專案 
@@ -59,25 +30,33 @@ app.post('/api/generate', async (req, res) => {
   res.setHeader('Content-Type', 'text/plain; charset=utf-8');
   res.setHeader('Transfer-Encoding', 'chunked');
 
-  const restoreStream = hijackStream(res);
+  /**
+   * [A級架構核心] Request-Scoped Logger (請求級別日誌器)
+   * Why: 避免多用戶併發(Concurrency)污染全域 stdout，實現無狀態(Stateless) API。
+   * How: 透過閉包(Closure)封裝 res.write，作為依賴注入傳遞給底層 AIService。
+   */
+  const streamLogger = (message) => {
+    process.stdout.write(message);
+    res.write(message);
+  };
 
   try {
     const projectName = outputDir || AIService.generateProjectName(description);
     const targetPath = path.resolve(process.cwd(), projectName);
 
-    console.log(`\n===========================================`);
-    console.log(`🌎 Initializing CodeCraft Agentic Pipeline`);
-    console.log(`🎯 Language Mode: ${lang === 'zh' ? '繁體中文' : 'English-First'}`);
-    console.log(`===========================================\n`);
+    streamLogger(`\n===========================================\n`);
+    streamLogger(`🌎 Initializing CodeCraft Agentic Pipeline\n`);
+    streamLogger(`🎯 Language Mode: ${lang === 'zh' ? '繁體中文' : 'English-First'}\n`);
+    streamLogger(`===========================================\n\n`);
 
-    const blueprint = await AIService.callArchitect(description, apiKey, lang);
-    await AIService.executeGenerationPipeline(targetPath, blueprint, description, apiKey, lang);
+    // 將 streamLogger 作為最後一個參數進行依賴注入
+    const blueprint = await AIService.callArchitect(description, apiKey, lang, streamLogger);
+    await AIService.executeGenerationPipeline(targetPath, blueprint, description, apiKey, lang, streamLogger);
 
   } catch (err) {
-    console.log(`\n\x1b[31m❌ Fatal Error: ${err.message}\x1b[0m`);
+    streamLogger(`\n\x1b[31m❌ Fatal Error: ${err.message}\x1b[0m\n`);
   } finally {
-    restoreStream();
-    res.end();
+    res.end(); // 確保連線正常關閉
   }
 });
 
@@ -89,16 +68,20 @@ app.post('/api/modify', async (req, res) => {
   res.setHeader('Content-Type', 'text/plain; charset=utf-8');
   res.setHeader('Transfer-Encoding', 'chunked');
 
-  const restoreStream = hijackStream(res);
+  // 獨立的實例化 Logger，確保修復過程的日誌與生成過程完全隔離
+  const streamLogger = (msg) => {
+    process.stdout.write(msg);
+    res.write(msg);
+  };
 
   try {
-    await AIService.applyQAPatch(targetPath, message, apiKey);
-    console.log(`\n\x1b[32m✅ Patch applied successfully using AST Smart Grafting.\x1b[0m`);
+    // 同樣將 streamLogger 注入給 applyQAPatch
+    await AIService.applyQAPatch(targetPath, message, apiKey, streamLogger);
+    streamLogger(`\n\x1b[32m✅ Patch applied successfully using AST Smart Grafting.\x1b[0m\n`);
   } catch (err) {
-    console.log(`\n\x1b[31m❌ Patch Failed: ${err.message}\x1b[0m`);
-    console.log(`\x1b[33m💡 [Tip] 請嘗試再次點擊修復按鈕，讓 AI 重新嘗試。\x1b[0m\n`);
+    streamLogger(`\n\x1b[31m❌ Patch Failed: ${err.message}\x1b[0m\n`);
+    streamLogger(`\x1b[33m💡 [Tip] 請嘗試再次點擊修復按鈕，讓 AI 重新嘗試。\x1b[0m\n`);
   } finally {
-    restoreStream();
     res.end();
   }
 });

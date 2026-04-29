@@ -16,6 +16,33 @@ function getLangInstruction(lang) {
 
 class AIService {
     /**
+     * 【A級架構核心】API 熔斷與指數退避重試機制 (Exponential Backoff Retry)
+     * Why: 外部 API 極度脆弱，網路波動或限流會導致系統崩潰。
+     * How: 封裝所有 Axios 請求，失敗時按 1s, 2s, 4s 等比延長等待時間後重試，保障系統強健度 (Robustness)。
+     */
+    static async _callApiWithRetry(apiFunc, maxRetries = 3, logger = null) {
+        const delay = (ms) => new Promise(res => setTimeout(res, ms));
+
+        for (let i = 0; i < maxRetries; i++) {
+            try {
+                return await apiFunc();
+            } catch (error) {
+                const isLastAttempt = i === maxRetries - 1;
+                const status = error.response ? error.response.status : 'Network/Unknown';
+                const msg = `\x1b[33m⚠️ API Interruption (${status}): ${error.message}. Retrying in ${Math.pow(2, i)}s... (Attempt ${i + 1}/${maxRetries})\x1b[0m`;
+
+                if (logger) logger(msg + '\n');
+                else console.log(msg);
+
+                if (isLastAttempt) {
+                    throw new Error(`API persistently failed after ${maxRetries} attempts: ${error.message}`);
+                }
+                await delay(Math.pow(2, i) * 1000); // 指數退避: 1s, 2s, 4s
+            }
+        }
+    }
+
+    /**
      * 解析並獲取 API 密鑰
      */
     static async resolveApiKey(cliKey) {
@@ -43,52 +70,69 @@ class AIService {
 
     /**
      * 階段 1：呼叫架構師代理 (The Architect Agent)
+     * @param {function} logger - 依賴注入的日誌回調函數
      */
-    static async callArchitect(description, apiKey, lang) {
-        console.log(`\n\x1b[35m👑 [Architect Agent] Analyzing requirements and designing blueprint...\x1b[0m`);
+    static async callArchitect(description, apiKey, lang, logger = null) {
+        const logMsg = `\x1b[35m👑 [Architect Agent] Analyzing requirements and designing blueprint...\x1b[0m`;
+        if (logger) logger(logMsg + '\n'); else console.log(logMsg);
 
+        /**
+                 * [A級 Prompt 優化]
+                 * 增加 PACKAGE.JSON MANDATORY 規則，強制 AI 聲明依賴。
+                 * 這是解決 "Cannot find module" 錯誤的根本之道。
+                 */
         const architectPrompt = `You are an elite Enterprise Software Architect. Design a PRODUCTION-READY, Deployment-Grade Full-Stack architecture based on the user's description.
-CRITICAL Requirements to maximize token usage and quality:
 CRITICAL Requirements to maximize token usage and quality:
 1. REAL IMAGES CAPABILITY: You MUST include a backend route \`backend/routes/images.js\` and link it to \`server.js\` as \`/api/get-image\`. 
    - This route MUST handle keyword-based image redirection using LoremFlickr (https://loremflickr.com/800/600/{q}).
-2. MULTI-PAGE REQUIREMENT: DO NOT build a single-page application (SPA) unless specifically asked. You MUST design a multi-page structure (e.g., index.html, detail.html, about.html) with proper navigation links between them.
-3. FRONTEND SIMPLICITY: You MUST use Vanilla HTML/JS/CSS for the frontend. Place frontend files directly in 'public/'.
-4. DATABASE MANDATORY: You MUST design a persistent data layer using Node.js + Express + standard 'sqlite3' (NO 'better-sqlite3'). Include init scripts and Model/Controller files.
-5. MODERN UI MANDATORY: Plan a modern UI utilizing Tailwind CSS. Include CSS files, JS utility files, and distinct HTML pages.
+2. MULTI-PAGE REQUIREMENT: DO NOT build a single-page application (SPA). You MUST design a multi-page structure (e.g., index.html) using Vanilla HTML/JS/CSS. Place frontend files directly in 'public/'.
+3. PURE JS DATABASE (NO C++): You MUST design a persistent data layer using Node.js + Express. DO NOT use 'sqlite3', 'mysql', or any database that requires compilation. You MUST use a pure JSON file approach (e.g., using Node's native 'fs.promises' to read/write a 'data.json' file).
+4. PACKAGE.JSON MANDATORY: You MUST include 'package.json' in the root directory. List ALL dependencies. (e.g., express, cors).
+5. MODERN UI MANDATORY: Plan a modern UI utilizing Tailwind CSS.
 6. ONLY output a pure JSON object where keys are file paths and values are comprehensive duty descriptions.
-7. NO Markdown tags. NO empty directories.
-8. ${getLangInstruction(lang)}`;
+7. NO BINARY FILES: Do NOT generate .jpg, .png, or .ico files. Images must be loaded via URL.
+8. NO Markdown tags. NO empty directories.
+9. ${getLangInstruction(lang)}`;
 
-        const response = await axios.post('https://api.deepseek.com/v1/chat/completions', {
+        // 將原始的 Axios 呼叫封裝進自動重試機制
+        const apiRequest = () => axios.post('https://api.deepseek.com/v1/chat/completions', {
             model: 'deepseek-chat',
             messages: [{ role: 'system', content: architectPrompt }, { role: 'user', content: description }],
             response_format: { type: 'json_object' },
             temperature: 0.2
         }, { headers: { Authorization: `Bearer ${apiKey}` }, timeout: 60000 });
 
+        const response = await this._callApiWithRetry(apiRequest, 3, logger);
         const content = response.data.choices[0].message.content;
         return JSON.parse(content.substring(content.indexOf('{'), content.lastIndexOf('}') + 1));
     }
 
     /**
      * 階段 2 & 3：執行多代理生成與 QA 測試管線
+     * @param {function} logger - 依賴注入的日誌回調函數
      */
-    static async executeGenerationPipeline(targetDir, blueprint, description, apiKey, lang) {
+    static async executeGenerationPipeline(targetDir, blueprint, description, apiKey, lang, logger = null) {
+        // 【A級架構核心】內部日誌分發器，實現業務邏輯與終端輸出的完美解耦
+        const log = (msg, exactOutput = false) => {
+            const formattedMsg = exactOutput ? msg : msg + '\n';
+            if (logger) logger(formattedMsg);
+            else exactOutput ? process.stdout.write(msg) : console.log(msg);
+        };
+
         const fileNames = Object.keys(blueprint);
-        console.log(`\n\x1b[36m👷 [Coder Agent] Blueprint received. Writing ${fileNames.length} files...\x1b[0m\n`);
+        log(`\n\x1b[36m👷 [Coder Agent] Blueprint received. Writing ${fileNames.length} files...\x1b[0m\n`);
 
         await fs.ensureDir(targetDir);
 
         let existingContext = "";
         if (await fs.pathExists(targetDir)) {
-            console.log(`\n🧠 [System] Project folder detected. Scanning existing codebase for Context...`);
+            log(`🧠 [System] Project folder detected. Scanning existing codebase for Context...`);
             try {
                 const filesMap = await FileService.readProjectFiles(targetDir);
                 existingContext = JSON.stringify(filesMap);
-                console.log(`✅ Existing context captured (Size: ${existingContext.length} chars)`);
+                log(`✅ Existing context captured (Size: ${existingContext.length} chars)`);
             } catch (err) {
-                console.log(`⚠️ Context scan failed or skipped: ${err.message}`);
+                log(`⚠️ Context scan failed or skipped: ${err.message}`);
             }
         }
 
@@ -96,43 +140,35 @@ CRITICAL Requirements to maximize token usage and quality:
         let dynamicMemory = {};
 
         for (const [filePath, fileRole] of Object.entries(blueprint)) {
-            process.stdout.write(`⏳ (${count}/${fileNames.length}) Crafting ${filePath} ... `);
+            log(`⏳ (${count}/${fileNames.length}) Crafting ${filePath} ... `, true);
             try {
                 let combinedContext = existingContext || "";
                 if (Object.keys(dynamicMemory).length > 0) {
                     combinedContext += `\n\n[CRITICAL MEMORY: FILES JUST GENERATED IN THIS SESSION]\n${JSON.stringify(dynamicMemory, null, 2)}`;
                 }
 
-                const code = await this._callCoder(filePath, fileRole, blueprint, description, apiKey, lang, combinedContext);
+                const code = await this._callCoder(filePath, fileRole, blueprint, description, apiKey, lang, combinedContext, logger);
                 await fs.outputFile(path.join(targetDir, filePath), code, 'utf8');
 
-                // 提取骨架並存入動態記憶體
                 dynamicMemory[filePath] = this._extractCodeSkeleton(code);
-
-                console.log(`\x1b[32m✅ Done\x1b[0m`);
+                log(`\x1b[32m✅ Done\x1b[0m`);
             } catch (err) {
-                console.log(`\x1b[31m❌ Failed: ${err.message}\x1b[0m`);
+                log(`\x1b[31m❌ Failed: ${err.message}\x1b[0m`);
             }
             count++;
         }
 
-        console.log(`\n📦 [System] Installing dependencies (npm install)...`);
+        log(`\n📦 [System] Installing dependencies (npm install)...`);
         try {
             await FileService.runCommand('npm', ['install'], targetDir);
         } catch (installErr) {
-            console.log(`\x1b[31m❌ [System] npm install failed: Dependency compilation error.\x1b[0m`);
-
+            log(`\x1b[31m❌ [System] npm install failed: Dependency compilation error.\x1b[0m`);
             const isZh = lang === 'zh';
             const modalData = {
-                message: isZh
-                    ? "依賴套件安裝失敗！這通常是因為 AI 選擇了需要 C++ 編譯的套件。請問要如何處理？"
-                    : "Dependency installation failed! AI chose a native package. How to proceed?",
-                options: isZh
-                    ? ["請 AI 改用不需要 C++ 編譯的輕量級資料庫", "強行略過安裝並嘗試啟動", "請 AI 分析這段報錯"]
-                    : ["Ask AI to rewrite without C++ dependencies", "Force skip install and try to start", "Ask AI to analyze the error"]
+                message: isZh ? "依賴套件安裝失敗！請問要如何處理？" : "Dependency installation failed! How to proceed?",
+                options: isZh ? ["請 AI 改用不需要編譯的輕量級資料庫", "強行略過安裝並嘗試啟動", "請 AI 分析報錯"] : ["Rewrite without C++ dependencies", "Force skip install", "Analyze the error"]
             };
-
-            console.log(`\n___REVIEWER_ACTION___:${JSON.stringify(modalData)}\n`);
+            log(`\n___REVIEWER_ACTION___:${JSON.stringify(modalData)}\n`);
             return false;
         }
 
@@ -149,39 +185,38 @@ CRITICAL Requirements to maximize token usage and quality:
         let testPassed = true;
 
         if (needsBuild) {
-            console.log(`\n🧪 [System] Build script detected. Running compilation tests...`);
+            log(`\n🧪 [System] Build script detected. Running compilation tests...`);
             testPassed = false;
             for (let attempt = 1; attempt <= 2; attempt++) {
                 try {
                     await FileService.runCommand('npm', ['run', 'build'], targetDir);
-                    console.log(`\x1b[32m✅ [QA] Test passed on attempt ${attempt}!\x1b[0m`);
+                    log(`\x1b[32m✅ [QA] Test passed on attempt ${attempt}!\x1b[0m`);
                     testPassed = true;
                     break;
                 } catch (error) {
-                    console.log(`\x1b[31m❌ [QA] Build failed! Initiating debugging sequence...\x1b[0m`);
+                    log(`\x1b[31m❌ [QA] Build failed! Initiating debugging sequence...\x1b[0m`);
                     if (attempt === 2) {
-                        console.log(`⚠️ Max auto-repair attempts reached.`);
+                        log(`⚠️ Max auto-repair attempts reached.`);
                         const isZh = lang === 'zh';
                         const modalData = {
                             message: isZh ? "自動化測試失敗。想怎麼處理？" : "Build failed. How to proceed?",
                             options: isZh ? ["忽略錯誤", "請 AI 修復", "請 AI 解釋"] : ["Ignore", "Ask AI to fix", "Ask AI to explain"]
                         };
-                        console.log(`\n___REVIEWER_ACTION___:${JSON.stringify(modalData)}\n`);
+                        log(`\n___REVIEWER_ACTION___:${JSON.stringify(modalData)}\n`);
                         break;
                     }
-                    console.log(`🧠 [QA Agent] Analyzing logs and writing patches...`);
+                    log(`🧠 [QA Agent] Analyzing logs and writing patches...`);
                 }
             }
         } else {
-            console.log(`\n⏩ [System] Native project detected (No build script). Skipping build phase.`);
+            log(`\n⏩ [System] Native project detected (No build script). Skipping build phase.`);
         }
 
         if (testPassed) {
-            console.log(`\n🎁 [System] Generating Beginner-Friendly Start Script...`);
+            log(`\n🎁 [System] Generating Beginner-Friendly Start Script...`);
 
             let finalStartCmd = startCommand;
             if (startCommand === 'node server.js') {
-                // 增加對 backend/ 資料夾的檢查
                 if (await fs.pathExists(path.join(targetDir, 'backend/server.js'))) {
                     finalStartCmd = 'node backend/server.js';
                 } else if (await fs.pathExists(path.join(targetDir, 'server/index.js'))) {
@@ -192,41 +227,23 @@ CRITICAL Requirements to maximize token usage and quality:
             }
 
             const batPath = path.join(targetDir, 'Start_Project.bat');
-            const rawBatContent = `@echo off
-title Running: ${path.basename(targetDir)}
-color 0A
-echo ===================================================
-echo   Welcome to your AI-Generated Project!
-echo ===================================================
-echo.
-echo [System] Starting local server on PORT 3000...
-echo [System] If the app crashes, the error will stay on this screen!
-echo.
-set PORT=3000
-start http://localhost:3000
-:: Use call to ensure control returns and window does not crash
-call ${finalStartCmd}
-echo.
-echo [WARNING] The server process has stopped or crashed.
-echo [TIP] Check the error messages above, copy them, and use AI Magic Edit!
-pause`;
+            const rawBatContent = `@echo off\ntitle Running: ${path.basename(targetDir)}\ncolor 0A\necho ===================================================\necho   Welcome to your AI-Generated Project!\necho ===================================================\necho.\necho [System] Starting local server on PORT 3000...\necho [System] If the app crashes, the error will stay on this screen!\necho.\nset PORT=3000\nstart http://localhost:3000\ncall ${finalStartCmd}\necho.\necho [WARNING] The server process has stopped or crashed.\necho [TIP] Check the error messages above, copy them, and use AI Magic Edit!\npause`;
 
-            const safeBatContent = rawBatContent.replace(/\r?\n/g, '\r\n');
-            await fs.outputFile(batPath, safeBatContent, 'utf8');
+            await fs.outputFile(batPath, rawBatContent.replace(/\r?\n/g, '\r\n'), 'utf8');
 
-            console.log(`\x1b[32m✅ Start_Project.bat created successfully!\x1b[0m`);
-            console.log(`\n===========================================`);
-            console.log(`🎉 Project Successfully Crafted!`);
-            console.log(`👉 To view the app, click the green \x1b[32m[▶️ Run]\x1b[0m button in the UI above.`);
-            console.log(`💡 Or manually double-click 'Start_Project.bat' inside the project folder.`);
-            console.log(`===========================================\n`);
+            log(`\x1b[32m✅ Start_Project.bat created successfully!\x1b[0m`);
+            log(`\n===========================================`);
+            log(`🎉 Project Successfully Crafted!`);
+            log(`👉 To view the app, click the green \x1b[32m[▶️ Run]\x1b[0m button in the UI above.`);
+            log(`💡 Or manually double-click 'Start_Project.bat' inside the project folder.`);
+            log(`===========================================\n`);
         }
 
         return testPassed;
     }
 
     /**
-     * 高解析度代碼骨架提取器 (已修復箭頭函數的正則問題！)
+     * 高解析度代碼骨架提取器 (純業務邏輯，無需 logger)
      */
     static _extractCodeSkeleton(code) {
         if (!code) return "";
@@ -240,7 +257,6 @@ pause`;
                 trimmed.startsWith('exports.') ||
                 trimmed.startsWith('const router =') ||
                 trimmed.includes('require(') ||
-                // [終極優化] 只捕捉帶有 '=>' 的箭頭函數，嚴禁捕捉長篇陣列資料！
                 (trimmed.startsWith('const ') && trimmed.includes('=>')) ||
                 (trimmed.startsWith('let ') && trimmed.includes('=>'));
         });
@@ -248,66 +264,86 @@ pause`;
     }
 
     /**
-     * 呼叫工程師代理 (終極大一統版)
-     */
-    static async _callCoder(filePath, fileRole, blueprint, description, apiKey, lang, rawMemory = "") {
+         * 高保真思維鏈工程師代理 (CoT Coder Agent - A-Grade Edition)
+         * @param {function} logger - 依賴注入的日誌回調函數
+         */
+    static async _callCoder(filePath, fileRole, blueprint, description, apiKey, lang, rawMemory = "", logger = null) {
         let formattedMemoryPrompt = "";
         if (rawMemory && rawMemory.length > 5) {
-            formattedMemoryPrompt = `\n[CRITICAL MEMORY: PROJECT AST SKELETON]\nHere is the structural skeleton of the files generated so far:\n${rawMemory}\nRULE: You MUST integrate your new code seamlessly with this existing architecture. Use EXACT function names and export styles shown above.`;
+            formattedMemoryPrompt = `\n[CRITICAL MEMORY: PROJECT AST SKELETON]\nHere is the structural skeleton of the files generated so far:\n${rawMemory}\nRULE: You MUST integrate your new code seamlessly with this existing architecture. Use EXACT function names, API routes, and DOM IDs.`;
         }
 
-        const coderPrompt = `You are a Senior Enterprise Full-Stack Engineer who specializes in 100% WORKING applications.
+        // 強制寫入思維鏈與嚴格的高保真度護欄
+        const coderPrompt = `You are an Elite Enterprise Full-Stack Engineer.
 Project Context: ${description}
 Blueprint: ${JSON.stringify(blueprint)}
 Current Task: Write the EXACT, PRODUCTION-READY code for \`${filePath}\` (Duty: ${fileRole}).
 
-CRITICAL RULES FOR "ZERO-KNOWLEDGE" USER SUCCESS:
-1. ZERO PLACEHOLDERS: NEVER use comments like "// logic goes here". Write 100% working, dense JavaScript logic.
-2. FULL INTERACTIVITY & AUTO-WIRING: 
-   - HTML: Include all necessary <script> and <link> tags connecting to the blueprint's files.
-   - JS: Every button/input ID in the HTML MUST have a working EventListener. Forms MUST submit.
-3. DEFENSIVE FRONTEND (NO FROZEN UI): Wrap fetch() calls in try/catch. If API fails, immediately fallback to hardcoded Mock Data to prevent perpetual loading spinners.
-4. EXACT DATA WIRING (HIGH FIDELITY REQUIRED): DO NOT generate garbage data (e.g., "Test Item 1") or use random loops to mix attributes. 
-   - Define an array of exact JSON objects with paired, accurate data (e.g., \`[{title: 'My AI Project', desc: 'Agentic Workflow', imagePath: '/images/project1.jpg'}]\`).
-   - Use standard local paths for personal portfolios so users can easily replace them.
-   - Use a short loop to execute parameterized SQL inserts for this array. Limit to 10-15 high-quality, perfectly accurate items to prevent token truncation.
-5. REAL ASSETS: Do NOT use fake placeholder URLs. Use dynamic URLs from public APIs or local paths as required.
-6. STRICT ALIGNMENT: Read the [CRITICAL MEMORY] section below. Do NOT hallucinate function names.
-7. EXHAUST YOUR TOKENS: Output the full file. Do not omit any logic.
-8. NO Markdown tags. Pure code ONLY.
-9. DYNAMIC REAL-ASSET INJECTION:
-   - For ANY <img> tags, you MUST NOT use placeholders or fake local paths.
-   - You MUST use the system's internal proxy: /api/get-image?q={keywords}
-   - Example for Genshin: <img src="/api/get-image?q=genshin,raiden,shogun" alt="Raiden Shogun">
-   - Example for Portfolio: <img src="/api/get-image?q=professional,developer,portrait" alt="Profile">
-10. ${getLangInstruction(lang)}
+CRITICAL QUALITY RULES (HIGH TOKEN CONSUMPTION AUTHORIZED):
+1. COMPLEXITY WITH RELIABILITY: You are authorized and encouraged to build sophisticated, high-fidelity UI/UX (e.g., modern layouts, animations, real-time feedback) IF requested.
+2. THE "NO-ORPHAN" WIRING RULE: Every single button, form, and interactive element MUST be perfectly wired to the backend. Frontend fetch() calls MUST match backend routes exactly.
+3. DEFENSIVE FRONTEND: Wrap fetch() calls in try/catch. If an API fails, gracefully show an error in the UI. DO NOT freeze.
+4. REAL ASSETS: Use '/api/get-image?q=keyword' for all images. NO placeholders.
+5. NO MOCK DATA: Read and write data from the SQLite database dynamically.
+6. MANDATORY CHAIN-OF-THOUGHT (CoT):
+   Before writing ANY code, you MUST think step-by-step in a <thought_process> block. You must plan:
+   - What exact DOM IDs are needed?
+   - What exact API endpoint (method & route) is being consumed or exposed?
+   - What is the JSON data structure?
+7. EXACT OUTPUT FORMAT:
+<thought_process>
+(Your architectural reasoning and state mapping here)
+</thought_process>
+\`\`\`[language]
+(Your 100% complete, working code here. No omissions.)
+\`\`\`
+8. ${getLangInstruction(lang)}
 ${formattedMemoryPrompt}`;
 
-        const response = await axios.post('https://api.deepseek.com/v1/chat/completions', {
+        const apiRequest = () => axios.post('https://api.deepseek.com/v1/chat/completions', {
             model: 'deepseek-chat',
-            messages: [{ role: 'system', content: coderPrompt }, { role: 'user', content: `Output code for ${filePath}` }],
-            temperature: 0.1,
+            messages: [{ role: 'system', content: coderPrompt }, { role: 'user', content: `Execute CoT protocol and output code for ${filePath}` }],
+            temperature: 0.2, // 微調溫度以平衡創意與邏輯
             max_tokens: 8192
         }, { headers: { Authorization: `Bearer ${apiKey}` } });
 
-        return response.data.choices[0].message.content.replace(/^```[\w-]*\n/i, '').replace(/```$/i, '').trim();
+        const response = await this._callApiWithRetry(apiRequest, 3, logger);
+        const content = response.data.choices[0].message.content;
+
+        // 提取並打印 AI 的思維鏈，讓你在終端機看到它的思考過程
+        const thoughtMatch = content.match(/<thought_process>([\s\S]*?)<\/thought_process>/i);
+        if (thoughtMatch && logger) {
+            logger(`\x1b[90m[Coder Thought Process]: ${thoughtMatch[1].trim().split('\n')[0]}...\x1b[0m\n`);
+        } else if (thoughtMatch) {
+            console.log(`\x1b[90m[Coder Thought Process]: ${thoughtMatch[1].trim().split('\n')[0]}...\x1b[0m`);
+        }
+
+        // 精準提取代碼區塊，避免將 thought_process 寫入源代碼文件中導致語法錯誤
+        const codeMatch = content.match(/```[\w-]*\n([\s\S]*?)```/);
+        if (codeMatch) {
+            return codeMatch[1].trim();
+        }
+
+        // 容錯機制：如果 AI 忘記打 markdown 代碼塊，嘗試手動剔除 thought_process
+        return content.replace(/<thought_process>[\s\S]*?<\/thought_process>/i, '').trim();
     }
 
     /**
-         * 階段 4：QA 審查與修復 (Chain-of-Thought 思維鏈除錯)
-         */
-    static async applyQAPatch(projectDir, message, apiKey) {
-        console.log(`🧠 [QA Agent] Analyzing AST and formulating Chain-of-Thought reasoning...`);
+     * 階段 4：QA 審查與修復 (Chain-of-Thought 思維鏈除錯)
+     * @param {function} logger - 依賴注入的日誌回調函數
+     */
+    static async applyQAPatch(projectDir, message, apiKey, logger = null) {
+        const log = (msg) => { if (logger) logger(msg + '\n'); else console.log(msg); };
 
-        // 👇 [新增的自動備份機制 - Agent Rollback System]
+        log(`🧠 [QA Agent] Analyzing AST and formulating Chain-of-Thought reasoning...`);
+
         const backupDir = `${projectDir}_backup_${Date.now()}`;
         try {
             await fs.copy(projectDir, backupDir);
-            console.log(`🛡️ [System] Created safety snapshot at: ${path.basename(backupDir)}`);
+            log(`🛡️ [System] Created safety snapshot at: ${path.basename(backupDir)}`);
         } catch (e) {
-            console.log(`⚠️ [System] Backup failed, proceeding carefully...`);
+            log(`⚠️ [System] Backup failed, proceeding carefully...`);
         }
-        // 👆 ---------------------------------------------------
 
         const filesMap = await FileService.readProjectFiles(projectDir);
         const existingContext = JSON.stringify(filesMap);
@@ -328,18 +364,19 @@ Provide ONLY a valid JSON object. Keys are file paths, values are the FULL FIXED
 NO markdown code blocks inside the <patch> tag.
 </patch>`;
 
-        const response = await axios.post('https://api.deepseek.com/v1/chat/completions', {
+        const apiRequest = () => axios.post('https://api.deepseek.com/v1/chat/completions', {
             model: 'deepseek-chat',
             messages: [{ role: 'system', content: qaPrompt }, { role: 'user', content: "Execute QA Protocol and provide the patch." }],
             temperature: 0.2,
             max_tokens: 8192
         }, { headers: { Authorization: `Bearer ${apiKey}` } });
 
+        const response = await this._callApiWithRetry(apiRequest, 3, logger);
         const content = response.data.choices[0].message.content;
 
         const thoughtMatch = content.match(/<thought_process>([\s\S]*?)<\/thought_process>/i);
         if (thoughtMatch) {
-            console.log(`\n\x1b[36m💡 [QA AI Thinking Process]:\n${thoughtMatch[1].trim()}\x1b[0m\n`);
+            log(`\n\x1b[36m💡 [QA AI Thinking Process]:\n${thoughtMatch[1].trim()}\x1b[0m\n`);
         }
 
         const patchMatch = content.match(/<patch>([\s\S]*?)<\/patch>/i);
@@ -347,14 +384,12 @@ NO markdown code blocks inside the <patch> tag.
             throw new Error("AI completely failed to generate the <patch> tag. (You can safely restore from the backup folder).");
         }
 
-        // ... 後面的 JSON 解析與 FileService.applyPatch 邏輯保持不變 ...
-
         let jsonStr = patchMatch[1].trim();
         jsonStr = jsonStr.replace(/^```[a-z]*\s*/i, '').replace(/\s*```$/i, '').trim();
 
         try {
             const patchData = JSON.parse(jsonStr);
-            console.log(`📝 [File Service] Applying AST Grafting for ${Object.keys(patchData).length} files...`);
+            log(`📝 [File Service] Applying AST Grafting for ${Object.keys(patchData).length} files...`);
             await FileService.applyPatch(projectDir, patchData);
             return true;
         } catch (parseErr) {
@@ -364,11 +399,10 @@ NO markdown code blocks inside the <patch> tag.
                 try {
                     const extractedJson = jsonStr.substring(firstBrace, lastBrace + 1);
                     const patchData = JSON.parse(extractedJson);
-                    console.log(`📝 [File Service] Applying AST Grafting for ${Object.keys(patchData).length} files...`);
+                    log(`📝 [File Service] Applying AST Grafting for ${Object.keys(patchData).length} files...`);
                     await FileService.applyPatch(projectDir, patchData);
                     return true;
                 } catch (fallbackErr) {
-                    console.error("Extracted JSON:", extractedJson);
                     throw new Error("JSON syntax is fundamentally broken by AI.");
                 }
             }
