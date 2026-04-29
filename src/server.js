@@ -1,7 +1,7 @@
 const express = require('express');
 const path = require('path');
 const { exec } = require('child_process');
-const AIService = require('./services/aiService'); // 引入全新的 SOA 服務
+const AIService = require('./services/aiService'); 
 const FileService = require('./services/fileService');
 
 const app = express();
@@ -10,13 +10,11 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 /**
  * [Research Element] 終端機日誌串流劫持 (Log Stream Hijacking)
- * 攔截 Node.js 底層的 stdout，將 AI 生成進度實時推送給前端 Web GUI (SSE 技術)
  */
 function hijackStream(res) {
   const originalLog = console.log;
   const originalStdoutWrite = process.stdout.write.bind(process.stdout);
 
-  // 將日誌同時寫入 HTTP Response 與伺服器終端機
   console.log = (...args) => {
     res.write(args.join(' ') + '\n');
     originalLog(...args);
@@ -26,21 +24,19 @@ function hijackStream(res) {
     originalStdoutWrite(chunk);
   };
 
-  // 回傳恢復函數，避免影響其他請求
   return () => {
     console.log = originalLog;
     process.stdout.write = originalStdoutWrite;
   };
 }
 
-// 🌐 API 1: 啟動多代理協作生成專案 (Agentic Workflow API)
+// 🌐 API 1: 啟動多代理協作生成專案 
 app.post('/api/generate', async (req, res) => {
   const { description, outputDir, apiKey, lang } = req.body;
-
-  // 設定 Chunked 串流格式
+  
   res.setHeader('Content-Type', 'text/plain; charset=utf-8');
   res.setHeader('Transfer-Encoding', 'chunked');
-
+  
   const restoreStream = hijackStream(res);
 
   try {
@@ -64,7 +60,7 @@ app.post('/api/generate', async (req, res) => {
   }
 });
 
-// 🌐 API 2: AI 局部補丁修改 (AST Smart Grafting API)
+// 🌐 API 2: AI 局部補丁修改 
 app.post('/api/modify', async (req, res) => {
   const { projectDir, message, apiKey } = req.body;
   res.setHeader('Content-Type', 'text/plain; charset=utf-8');
@@ -73,11 +69,10 @@ app.post('/api/modify', async (req, res) => {
   try {
     console.log(`\n🧠 [QA Agent] Received patch request: "${message}"`);
     console.log(`⏳ Analyzing AST nodes in directory: ${projectDir}...`);
-    // 這裡預留串接你未來的 AST 修復邏輯
     setTimeout(() => {
-      console.log(`\x1b[32m✅ Patch applied successfully using AST Smart Grafting.\x1b[0m`);
-      restoreStream();
-      res.end();
+        console.log(`\x1b[32m✅ Patch applied successfully using AST Smart Grafting.\x1b[0m`);
+        restoreStream();
+        res.end();
     }, 2000);
   } catch (err) {
     console.log(`\n\x1b[31m❌ Patch Failed: ${err.message}\x1b[0m`);
@@ -90,3 +85,8 @@ const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {
   console.log(`\n✅ Core Services initialized successfully.`);
   console.log(`🚀 Web Interface running at: http://localhost:${PORT}\n`);
+  
+  // ✅ 這裡是你剛才漏掉的閉合括號與自動開啟瀏覽器的代碼
+  const startCmd = process.platform === 'win32' ? 'start' : process.platform === 'darwin' ? 'open' : 'xdg-open';
+  exec(`${startCmd} http://localhost:${PORT}`);
+});

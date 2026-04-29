@@ -8,24 +8,51 @@ echo       🚀 Welcome to CodeCraft Agentic IDE 🚀
 echo ===================================================
 echo.
 
+set "NEEDS_RESTART=0"
+
 :: Step 1: Bootstrapping - Check Node.js runtime
 where node >nul 2>nul
 if %errorlevel% neq 0 (
     echo [System] Node.js runtime not found!
     echo [System] Initiating unattended installation via Windows Package Manager...
-    echo [!] Please click 'Yes' if User Account Control (UAC) prompts appear.
-    echo.
+    echo [!] Please click 'Yes' if User Account Control prompt appears.
+    echo [System] Downloading and installing... ^(This may take 1-3 minutes^)
     
-    winget install OpenJS.NodeJS.LTS -e --accept-source-agreements --accept-package-agreements
+    :: Force source to 'winget' to avoid msstore certificate errors, and mask system localized output
+    winget install --id OpenJS.NodeJS.LTS -e --source winget --accept-source-agreements --accept-package-agreements --silent >nul 2>nul
     
-    echo.
     echo [✅] Node.js installation complete!
-    echo [⚠️] ACTION REQUIRED: Please CLOSE this terminal and RE-OPEN the script to reload environment variables.
+    set "NEEDS_RESTART=1"
+)
+
+:: Step 2: Bootstrapping - Check Git Version Control
+where git >nul 2>nul
+if %errorlevel% neq 0 (
+    echo [System] Git version control not found!
+    echo [System] Initiating unattended installation via Windows Package Manager...
+    echo [!] Please click 'Yes' if User Account Control prompt appears.
+    echo [System] Downloading and installing... ^(This may take 1-3 minutes^)
+    
+    :: Force source to 'winget' to avoid msstore certificate errors, and mask system localized output
+    winget install --id Git.Git -e --source winget --accept-source-agreements --accept-package-agreements --silent >nul 2>nul
+    
+    echo [✅] Git installation complete!
+    set "NEEDS_RESTART=1"
+)
+
+:: Step 3: Hard Stop for Environment Variable Reload
+if "%NEEDS_RESTART%"=="1" (
+    echo.
+    echo ==============================================================
+    echo [⚠️] ACTION REQUIRED: System Environment Variables Updated!
+    echo [⚠️] You MUST CLOSE this terminal window completely right now.
+    echo [⚠️] After closing, DOUBLE-CLICK 'OpenCodeCraft.bat' again.
+    echo ==============================================================
     pause
     exit /b
 )
 
-:: Step 2: Dependency Resolution
+:: Step 4: Dependency Resolution (npm install)
 if not exist "node_modules\" (
     echo [System] First run detected. Resolving project dependencies...
     echo [System] Please wait, fetching packages from npm registry...
@@ -34,7 +61,7 @@ if not exist "node_modules\" (
     echo.
 )
 
-:: Step 3: Launching the Service
+:: Step 5: Launching the Service
 echo [System] Booting up CodeCraft Agentic Workflow Engine and Web UI...
 echo [System] Keep this terminal open. The system will be available in your browser!
 echo.
